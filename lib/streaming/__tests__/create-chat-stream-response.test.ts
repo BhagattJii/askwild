@@ -1,0 +1,682 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+
+const mocks = vi.hoisted(() => ({
+  stream: vi.fn(),
+  span: {
+    traceId: 'trace-id',
+    update: vi.fn(),
+    end: vi.fn()
+  },
+  forceFlush: vi.fn(),
+  finishPromise: Promise.resolve(),
+  trimColdStartHistory: vi.fn()
+}))
+
+vi.mock('ai', () => ({
+  consumeStream: vi.fn(),
+  convertToModelMessages: vi.fn(async () => []),
+  smoothStream: vi.fn()
+}))
+
+vi.mock('@langfuse/tracing', () => ({
+  propagateAttributes: vi.fn((_attributes: unknown, callback: () => unknown) =>
+    callback()
+  ),
+  startActiveObservation: vi.fn(
+    (_name: string, callback: (span: typeof mocks.span) => unknown) =>
+      callback(mocks.span)
+  )
+}))
+
+vi.mock('@/instrumentation', () => ({
+  langfuseSpanProcessor: {
+    forceFlush: mocks.forceFlush
+  }
+}))
+
+vi.mock('@/lib/actions/chat', () => ({
+  loadChat: vi.fn()
+}))
+
+vi.mock('@/lib/agents/researcher', () => ({
+  researcher: vi.fn(() => ({ stream: mocks.stream }))
+}))
+
+vi.mock('@/lib/agents/title-generator', () => ({
+  generateChatTitle: vi.fn(async () => 'Title')
+}))
+
+vi.mock('@/lib/streaming/helpers/attachment-sizes', () => ({
+  resolveAttachmentSizes: vi.fn(async (messages: unknown) => messages)
+}))
+
+vi.mock('@/lib/streaming/helpers/trim-cold-start-history', () => ({
+  COLD_START_HISTORY_TOKEN_LIMIT: 200_000,
+  trimColdStartHistory: mocks.trimColdStartHistory
+}))
+
+vi.mock('@/lib/streaming/helpers/persist-stream-results', () => ({
+  persistStreamResults: vi.fn(async () => undefined)
+}))
+
+vi.mock('@/lib/streaming/helpers/prepare-messages', () => ({
+  prepareMessages: vi.fn(async () => [])
+}))
+
+vi.mock('@/lib/utils/telemetry', () => ({
+  isTracingEnabled: vi.fn(() => true)
+}))
+
+vi.mock('@/lib/utils/usage-logging', () => ({
+  isUsageLogging: vi.fn(() => false),
+  logUsage: vi.fn()
+}))
+
+import { loadChat } from '@/lib/actions/chat'
+import { researcher } from '@/lib/agents/researcher'
+import { DeterministicPreparationError } from '@/lib/errors/deterministic-preparation-error'
+import { serializeToolFailure, ToolFailureError } from '@/lib/errors/tool-error'
+import { createChatStreamResponse } from '@/lib/streaming/create-chat-stream-response'
+import { describeStreamError } from '@/lib/streaming/helpers/describe-stream-error'
+import { EMPTY_RESPONSE_STATUS_MESSAGE } from '@/lib/streaming/helpers/is-empty-response'
+import { prepareMessages } from '@/lib/streaming/helpers/prepare-messages'
+import { getMaxAllowedTokens } from '@/lib/utils/context-window'
+
+type StreamOptions = {
+  onError: (event: { error: unknown }) => void
+}
+
+type UIMessageStreamResponseOptions = {
+  onEnd: (event: {
+    responseMessage: {
+      id: string
+      role: 'assistant'
+      parts: Array<{ type: string; text?: string; state?: string }>
+    }
+    isAborted: boolean
+  }) => Promise<void>
+  onError: (error: unknown) => string
+}
+
+function createFakeResult(
+  isAborted = false,
+  parts: Array<{ type: string; text?: string; state?: string }> = [
+    { type: 'text', text: 'Answer' }
+  ],
+  // Raised into the response handler before the turn ends, the way a tool
+  // failure reaches it while the stream keeps going.
+  responseError?: { error: unknown; onSerialized?: (payload: string) => void }
+) {
+  return {
+    consumeStream: vi.fn(),
+    toUIMessageStreamResponse: vi.fn(
+      (options: UIMessageStreamResponseOptions) => {
+        if (responseError) {
+          const serialized = options.onError(responseError.error)
+          if (responseError.onSerialized) responseError.onSerialized(serialized)
+        }
+        mocks.finishPromise = options.onEnd({
+          responseMessage: {
+            id: 'response-id',
+            role: 'assistant',
+            parts
+          },
+          isAborted
+        })
+        return new Response()
+      }
+    )
+  }
+}
+
+function createAbortedSignal(): AbortSignal {
+  const controller = new AbortController()
+  controller.abort()
+
+  return controller.signal
+}
+
+function createConfig(abortSignal: AbortSignal = new AbortController().signal) {
+  return {
+    message: {
+      id: 'message-id',
+      role: 'user' as const,
+      parts: [{ type: 'text' as const, text: 'hello' }]
+    },
+    model: { providerId: 'openai', id: 'gpt-4o-mini' } as any,
+    chatId: 'chat-id',
+    userId: 'user-id',
+    abortSignal,
+    isNewChat: true,
+    searchMode: 'quick' as const
+  }
+}
+
+function createConfigWithParts(parts: unknown[]) {
+  const config = createConfig()
+
+  return {
+    ...config,
+    message: { ...config.message, parts: parts as typeof config.message.parts }
+  }
+}
+
+describe('createChatStreamResponse', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mocks.finishPromise = Promise.resolve()
+    mocks.trimColdStartHistory.mockImplementation((messages: unknown[]) => ({
+      messages,
+      trimmedAtCurrentTurn: false
+    }))
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+  })
+
+  it('passes the chat ID to the researcher', async () => {
+    mocks.stream.mockResolvedValue(createFakeResult())
+
+    await createChatStreamResponse(createConfig())
+    await mocks.finishPromise
+
+    expect(researcher).toHaveBeenCalledWith(
+      expect.objectContaining({
+        chatId: 'chat-id',
+        citationLabelSeed: 1
+      })
+    )
+  })
+
+  it('seeds citation labels from the prepared persisted history', async () => {
+    vi.mocked(prepareMessages).mockResolvedValueOnce([
+      {
+        id: 'assistant-history',
+        role: 'assistant',
+        parts: [
+          {
+            type: 'tool-search',
+            toolCallId: 'call_history',
+            state: 'output-available',
+            output: {
+              results: [
+                {
+                  label: 'S6',
+                  title: 'History',
+                  url: 'https://example.com/history',
+                  content: 'Evidence'
+                }
+              ]
+            }
+          },
+          { type: 'text', text: 'Earlier answer. [1](#S6)' }
+        ]
+      }
+    ] as any)
+    mocks.stream.mockResolvedValue(createFakeResult())
+
+    await createChatStreamResponse(createConfig())
+    await mocks.finishPromise
+
+    expect(researcher).toHaveBeenCalledWith(
+      expect.objectContaining({ citationLabelSeed: 7 })
+    )
+  })
+
+  it('loads an existing chat', async () => {
+    mocks.stream.mockResolvedValue(createFakeResult())
+
+    await createChatStreamResponse({ ...createConfig(), isNewChat: false })
+    await mocks.finishPromise
+
+    expect(loadChat).toHaveBeenCalledWith('chat-id', 'user-id')
+  })
+
+  it('does not mark the span as failed for an aborted stream error', async () => {
+    const streamError = new Error('request stopped')
+    streamError.name = 'ResponseAborted'
+    mocks.stream.mockImplementation(async (options: StreamOptions) => {
+      options.onError({ error: streamError })
+      return createFakeResult(true)
+    })
+
+    await createChatStreamResponse(createConfig(createAbortedSignal()))
+    await mocks.finishPromise
+
+    expect(mocks.span.update).toHaveBeenCalledWith({ input: 'hello' })
+    expect(mocks.span.end).toHaveBeenCalledOnce()
+    expect(mocks.forceFlush).toHaveBeenCalledOnce()
+  })
+
+  it('marks the span as failed when the client disconnects after the failure', async () => {
+    const streamError = new Error('upstream stopped')
+    streamError.name = 'AbortError'
+    const controller = new AbortController()
+    mocks.stream.mockImplementation(async (options: StreamOptions) => {
+      options.onError({ error: streamError })
+      controller.abort()
+      return createFakeResult()
+    })
+
+    await createChatStreamResponse(createConfig(controller.signal))
+    await mocks.finishPromise
+
+    expect(mocks.span.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        level: 'ERROR',
+        statusMessage: describeStreamError(streamError),
+        metadata: {
+          streamErrorPhase: 'generation',
+          streamErrorShape: { name: 'AbortError' }
+        }
+      })
+    )
+  })
+
+  it('marks a failure raised before the stream as the preparation phase', async () => {
+    const prepareError = new TypeError('private failure detail')
+    vi.mocked(prepareMessages).mockRejectedValueOnce(prepareError)
+
+    await createChatStreamResponse(createConfig())
+
+    expect(mocks.span.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        level: 'ERROR',
+        statusMessage: describeStreamError(prepareError),
+        metadata: {
+          streamErrorPhase: 'preparation',
+          streamErrorStage: 'prepare-messages',
+          streamErrorShape: { name: 'TypeError' }
+        }
+      })
+    )
+    expect(mocks.stream).not.toHaveBeenCalled()
+  })
+
+  it('maps deterministic initial chat load failures to public errors', async () => {
+    vi.mocked(loadChat).mockRejectedValueOnce(
+      new DeterministicPreparationError(
+        'Unknown part type: private-user-content'
+      )
+    )
+
+    const response = await createChatStreamResponse({
+      ...createConfig(),
+      isNewChat: false
+    })
+    const payload = await response.json()
+
+    expect(response.status).toBe(500)
+    expect(payload).toMatchObject({
+      code: 'malformed_request',
+      retryable: false,
+      error:
+        'This conversation could not be sent to the model. Please start a new chat.'
+    })
+    expect(JSON.stringify(payload)).not.toContain('private-user-content')
+    expect(prepareMessages).not.toHaveBeenCalled()
+    expect(mocks.stream).not.toHaveBeenCalled()
+  })
+
+  it('attaches shape metadata for an unclassified stream error', async () => {
+    const streamError = Object.assign(new Error('private failure detail'), {
+      name: 'StreamFailure',
+      errno: 91
+    })
+    mocks.stream.mockImplementation(async (options: StreamOptions) => {
+      options.onError({ error: streamError })
+      return createFakeResult()
+    })
+
+    await createChatStreamResponse(createConfig())
+    await mocks.finishPromise
+
+    expect(mocks.span.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        level: 'ERROR',
+        statusMessage: describeStreamError(streamError),
+        metadata: {
+          streamErrorPhase: 'generation',
+          streamErrorShape: {
+            name: 'StreamFailure',
+            errno: 91
+          }
+        }
+      })
+    )
+    expect(JSON.stringify(mocks.span.update.mock.calls)).not.toContain(
+      'private failure detail'
+    )
+  })
+
+  it('records the user message and the finished answer on the root span', async () => {
+    mocks.stream.mockResolvedValue(createFakeResult())
+
+    await createChatStreamResponse(createConfig())
+    await mocks.finishPromise
+
+    expect(mocks.span.update).toHaveBeenCalledWith({
+      input: 'hello',
+      output: 'Answer'
+    })
+  })
+
+  it('records a cold-start history trim on the root span', async () => {
+    mocks.trimColdStartHistory.mockImplementationOnce(
+      (messages: unknown[]) => ({
+        messages,
+        trimmedAtCurrentTurn: true
+      })
+    )
+    mocks.stream.mockResolvedValue(createFakeResult())
+
+    await createChatStreamResponse(createConfig())
+    await mocks.finishPromise
+
+    expect(mocks.span.update).toHaveBeenCalledWith({
+      input: 'hello',
+      output: 'Answer',
+      metadata: { coldStartHistoryTrimmed: true }
+    })
+  })
+
+  it('bounds the cold-start history limit by the model input window', async () => {
+    const config = createConfig()
+    mocks.stream.mockResolvedValue(createFakeResult())
+
+    await createChatStreamResponse(config)
+    await mocks.finishPromise
+
+    expect(mocks.trimColdStartHistory).toHaveBeenCalledWith(expect.any(Array), {
+      limit: Math.min(200_000, getMaxAllowedTokens(config.model)),
+      modelId: 'gpt-4o-mini'
+    })
+  })
+
+  it('omits the output when the answer is only whitespace', async () => {
+    mocks.stream.mockResolvedValue(
+      createFakeResult(false, [{ type: 'text', text: '   \n' }])
+    )
+
+    await createChatStreamResponse(createConfig())
+    await mocks.finishPromise
+
+    expect(mocks.span.update).toHaveBeenCalledWith({
+      input: 'hello',
+      level: 'ERROR',
+      statusMessage: EMPTY_RESPONSE_STATUS_MESSAGE
+    })
+  })
+
+  it('omits the output when the stream failed after partial text', async () => {
+    const streamError = new Error('upstream stopped')
+    streamError.name = 'AbortError'
+    mocks.stream.mockImplementation(async (options: StreamOptions) => {
+      options.onError({ error: streamError })
+      return createFakeResult(false, [{ type: 'text', text: 'Partial ans' }])
+    })
+
+    await createChatStreamResponse(createConfig())
+    await mocks.finishPromise
+
+    const update = mocks.span.update.mock.calls.at(-1)?.[0]
+    expect(update).toMatchObject({ input: 'hello', level: 'ERROR' })
+    expect(update).not.toHaveProperty('output')
+  })
+
+  it('keeps the input and omits the output for an aborted turn', async () => {
+    mocks.stream.mockResolvedValue(createFakeResult(true))
+
+    await createChatStreamResponse(createConfig(createAbortedSignal()))
+    await mocks.finishPromise
+
+    expect(mocks.span.update).toHaveBeenCalledWith({ input: 'hello' })
+  })
+
+  it('takes the input from the prepared messages when the turn has no message', async () => {
+    vi.mocked(prepareMessages).mockResolvedValueOnce([
+      {
+        id: 'earlier-user',
+        role: 'user',
+        parts: [{ type: 'text', text: 'earlier question' }]
+      },
+      {
+        id: 'earlier-assistant',
+        role: 'assistant',
+        parts: [{ type: 'text', text: 'earlier answer' }]
+      }
+    ] as any)
+    mocks.stream.mockResolvedValue(createFakeResult())
+
+    await createChatStreamResponse({
+      ...createConfig(),
+      message: null,
+      trigger: 'regenerate-assistant-message' as const
+    })
+    await mocks.finishPromise
+
+    expect(mocks.span.update).toHaveBeenCalledWith({
+      input: 'earlier question',
+      output: 'Answer'
+    })
+  })
+
+  it('describes a file-only turn on the root span input', async () => {
+    mocks.stream.mockResolvedValue(createFakeResult())
+
+    await createChatStreamResponse(
+      createConfigWithParts([
+        {
+          type: 'file',
+          filename: 'report.pdf',
+          mediaType: 'application/pdf',
+          url: 'https://example.com/report.pdf'
+        }
+      ])
+    )
+    await mocks.finishPromise
+
+    expect(mocks.span.update).toHaveBeenCalledWith({
+      input: '"report.pdf" (application/pdf)',
+      output: 'Answer'
+    })
+  })
+
+  it('describes a pasted-content-only turn without its content', async () => {
+    mocks.stream.mockResolvedValue(createFakeResult())
+
+    await createChatStreamResponse(
+      createConfigWithParts([
+        { type: 'data-pastedContent', data: { text: 'secret'.repeat(100) } }
+      ])
+    )
+    await mocks.finishPromise
+
+    expect(mocks.span.update).toHaveBeenCalledWith({
+      input: 'pasted content (600 characters)',
+      output: 'Answer'
+    })
+    expect(JSON.stringify(mocks.span.update.mock.calls)).not.toContain('secret')
+  })
+
+  it('keeps the URL of a URL-card-only turn', async () => {
+    mocks.stream.mockResolvedValue(createFakeResult())
+
+    await createChatStreamResponse(
+      createConfigWithParts([
+        { type: 'data-sourceUrl', data: { url: 'https://example.com/a' } }
+      ])
+    )
+    await mocks.finishPromise
+
+    expect(mocks.span.update).toHaveBeenCalledWith({
+      input: 'URL card: https://example.com/a',
+      output: 'Answer'
+    })
+  })
+
+  it('describes both a file and pasted content on the same turn', async () => {
+    mocks.stream.mockResolvedValue(createFakeResult())
+
+    await createChatStreamResponse(
+      createConfigWithParts([
+        {
+          type: 'file',
+          filename: 'notes.txt',
+          mediaType: 'text/plain',
+          url: 'https://example.com/notes.txt'
+        },
+        { type: 'data-pastedContent', data: { text: 'ab' } }
+      ])
+    )
+    await mocks.finishPromise
+
+    expect(mocks.span.update).toHaveBeenCalledWith({
+      input: '"notes.txt" (text/plain), pasted content (2 characters)',
+      output: 'Answer'
+    })
+  })
+
+  it('describes the structured parts of the prepared history on a regenerate turn', async () => {
+    vi.mocked(prepareMessages).mockResolvedValueOnce([
+      {
+        id: 'earlier-user',
+        role: 'user',
+        parts: [
+          {
+            type: 'file',
+            filename: 'earlier.png',
+            mediaType: 'image/png',
+            url: 'https://example.com/earlier.png'
+          }
+        ]
+      }
+    ] as any)
+    mocks.stream.mockResolvedValue(createFakeResult())
+
+    await createChatStreamResponse({
+      ...createConfig(),
+      message: null,
+      trigger: 'regenerate-assistant-message' as const
+    })
+    await mocks.finishPromise
+
+    expect(mocks.span.update).toHaveBeenCalledWith({
+      input: '"earlier.png" (image/png)',
+      output: 'Answer',
+      metadata: {
+        carriedContext: { attachments: 1, attachmentTokens: 4_000 }
+      }
+    })
+  })
+
+  it('leaves the input unset for a turn with no parts', async () => {
+    mocks.stream.mockResolvedValue(createFakeResult())
+
+    await createChatStreamResponse(createConfigWithParts([]))
+    await mocks.finishPromise
+
+    expect(mocks.span.update).toHaveBeenCalledWith({ output: 'Answer' })
+  })
+
+  it('keeps the empty-response failure alongside the root span input', async () => {
+    mocks.stream.mockResolvedValue(createFakeResult(false, []))
+
+    await createChatStreamResponse(createConfig())
+    await mocks.finishPromise
+
+    expect(mocks.span.update).toHaveBeenCalledWith({
+      input: 'hello',
+      level: 'ERROR',
+      statusMessage: EMPTY_RESPONSE_STATUS_MESSAGE
+    })
+  })
+
+  it('refunds a non-aborted stream that finishes without an answer', async () => {
+    const onZeroPartError = vi.fn(async () => undefined)
+    mocks.stream.mockResolvedValue(createFakeResult(false, []))
+
+    await createChatStreamResponse({
+      ...createConfig(),
+      onZeroPartError
+    })
+    await mocks.finishPromise
+
+    expect(onZeroPartError).toHaveBeenCalledOnce()
+  })
+
+  it('keeps the turn successful when a tool fails and the answer still lands', async () => {
+    const onZeroPartError = vi.fn(async () => undefined)
+    const toolFailure = new ToolFailureError(
+      'fetch',
+      new Error('HTTP 403: Forbidden')
+    )
+    let serialized: string | undefined
+    mocks.stream.mockResolvedValue(
+      createFakeResult(
+        false,
+        [
+          { type: 'tool-fetch', state: 'output-error' },
+          { type: 'text', text: 'Answer' }
+        ],
+        {
+          error: toolFailure,
+          onSerialized: payload => {
+            serialized = payload
+          }
+        }
+      )
+    )
+
+    await createChatStreamResponse({ ...createConfig(), onZeroPartError })
+    await mocks.finishPromise
+
+    expect(serialized).toBe(serializeToolFailure(toolFailure))
+    expect(mocks.span.update).toHaveBeenCalledWith({
+      input: 'hello',
+      output: 'Answer'
+    })
+    expect(onZeroPartError).not.toHaveBeenCalled()
+  })
+
+  it('marks the turn as failed when a tool fails and nothing is answered', async () => {
+    const onZeroPartError = vi.fn(async () => undefined)
+    const toolFailure = new ToolFailureError(
+      'search',
+      new Error('Tavily search failed: HTTP 400: Bad Request')
+    )
+    mocks.stream.mockResolvedValue(
+      createFakeResult(false, [], { error: toolFailure })
+    )
+
+    await createChatStreamResponse({ ...createConfig(), onZeroPartError })
+    await mocks.finishPromise
+
+    const update = mocks.span.update.mock.calls.at(-1)?.[0]
+    expect(update).toMatchObject({ input: 'hello', level: 'ERROR' })
+    expect(update).not.toHaveProperty('output')
+    expect(onZeroPartError).toHaveBeenCalledOnce()
+  })
+
+  it('marks the turn as failed when a tool failure leaves only a preamble', async () => {
+    const toolFailure = new ToolFailureError(
+      'fetch',
+      new Error('HTTP 403: Forbidden')
+    )
+    mocks.stream.mockResolvedValue(
+      createFakeResult(
+        false,
+        [
+          { type: 'text', text: 'Let me look that up.' },
+          { type: 'tool-fetch', state: 'output-error' }
+        ],
+        { error: toolFailure }
+      )
+    )
+
+    await createChatStreamResponse(createConfig())
+    await mocks.finishPromise
+
+    const update = mocks.span.update.mock.calls.at(-1)?.[0]
+    expect(update).toMatchObject({ input: 'hello', level: 'ERROR' })
+    expect(update).not.toHaveProperty('output')
+  })
+})

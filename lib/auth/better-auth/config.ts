@@ -1,0 +1,488 @@
+import { betterAuth } from 'better-auth'
+import { drizzleAdapter } from 'better-auth/adapters/drizzle'
+import { APIError } from 'better-auth/api'
+import { nextCookies } from 'better-auth/next-js'
+import { admin, genericOAuth } from 'better-auth/plugins'
+import { asc, count, eq, sql } from 'drizzle-orm'
+
+import { db } from '@/lib/db'
+
+import {
+  getOidcProviderId,
+  getOidcProviderName as getOidcProviderNameUtil,
+  isOidcConfigured as isOidcConfiguredUtil
+} from '../oauth-config'
+
+import { isSmtpConfigured, sendSmtpMail } from './mailer'
+import * as authSchema from './schema'
+
+export type SignUpMode = 'open' | 'invite'
+
+/**
+ * Password reset and invitation emails require SMTP. The `passwordReset`
+ * capability of the better-auth provider is gated on this at runtime.
+ */
+export function isBetterAuthSmtpConfigured(): boolean {
+  return isSmtpConfigured()
+}
+
+/**
+ * True when OIDC is configured: all required environment variables are set.
+ * OIDC_SCOPE is optional and defaults to 'openid profile email'.
+ */
+export function isOidcConfigured(): boolean {
+  return isOidcConfiguredUtil()
+}
+
+export function getOidcProviderName(): string {
+  return getOidcProviderNameUtil()
+}
+
+/**
+ * Canonical origin for absolute links delivered by email. Never derived
+ * from request headers: `Origin` and `x-forwarded-host` are caller-
+ * controlled, and a spoofed value would deliver a valid one-time
+ * credential to an attacker domain (host-header injection). Deployments
+ * that deliver email must set `BETTER_AUTH_URL`.
+ */
+export function getEmailLinkOrigin(): string {
+  return (process.env.BETTER_AUTH_URL ?? '').trim().replace(/\/+$/, '')
+}
+
+export function getSignUpMode(): SignUpMode {
+  const raw = process.env.AUTH_SIGNUP_MODE?.trim().toLowerCase()
+  if (!raw) {
+    return 'open' // documented default
+  }
+  if (raw === 'open' || raw === 'invite') {
+    return raw
+  }
+  // A typo must not silently open an invite-only instance to the internet:
+  // fail loudly instead of guessing (same policy as BETTER_AUTH_SECRET).
+  throw new Error(
+    `Invalid AUTH_SIGNUP_MODE "${process.env.AUTH_SIGNUP_MODE}". ` +
+      'Expected "open" or "invite".'
+  )
+}
+
+function getSecret(): string {
+  const secret = process.env.BETTER_AUTH_SECRET?.trim()
+  if (secret) {
+    return secret
+  }
+  if (process.env.NODE_ENV === 'production') {
+    // Never fall back to a publicly known secret in production: better-auth
+    // must fail fast instead of silently signing with a shared default.
+    throw new Error(
+      'BETTER_AUTH_SECRET must be set when running AUTH_PROVIDER=better-auth.'
+    )
+  }
+  if (process.env.NODE_ENV !== 'test') {
+    console.warn(
+      '⚠️  BETTER_AUTH_SECRET is not set. Using an insecure development ' +
+        'secret. Set BETTER_AUTH_SECRET to a stable random value.'
+    )
+  }
+  return 'hawkin-better-auth-development-secret'
+}
+
+/**
+ * Sign-up gate for the bootstrap window: while the user table is empty and
+ * `BOOTSTRAP_ADMIN_EMAIL` is set, only that address may sign up. The admin
+ * role itself is granted by `claimBootstrapAdmin` once the row exists.
+ */
+export async function applyBootstrapAdminGate(data: {
+  email?: string
+}): Promise<void> {
+  const [existing] = await db.select({ total: count() }).from(authSchema.user)
+
+  if ((existing?.total ?? 0) > 0) {
+    return // Bootstrap window is closed
+  }
+
+  const gate = process.env.BOOTSTRAP_ADMIN_EMAIL?.trim().toLowerCase()
+  if (gate && data.email?.trim().toLowerCase() !== gate) {
+    throw new APIError('FORBIDDEN', {
+      message:
+        'Sign-up is restricted to the configured BOOTSTRAP_ADMIN_EMAIL address.'
+    })
+  }
+}
+
+/**
+ * True while the bootstrap window is open: `BOOTSTRAP_ADMIN_EMAIL` is set
+ * and the user table is still empty. The sign-up page uses this to render
+ * the form (without a token) on a fresh invite-only instance; the address
+ * itself is enforced by `applyBootstrapAdminGate` at creation time.
+ */
+export async function isBootstrapWindowOpen(): Promise<boolean> {
+  if (!process.env.BOOTSTRAP_ADMIN_EMAIL?.trim()) {
+    return false
+  }
+  const [existing] = await db.select({ total: count() }).from(authSchema.user)
+  return (existing?.total ?? 0) === 0
+}
+
+/**
+ * True when the email is the seed administrator of a fresh instance:
+ * `BOOTSTRAP_ADMIN_EMAIL` is set, the address matches, and the user table
+ * is still empty. Invite-only instances use this to let the first admin
+ * sign up without an invitation — creating invitations requires an admin,
+ * so the instance would otherwise have no way to bootstrap.
+ */
+export async function isBootstrapAccount(email: string): Promise<boolean> {
+  const gate = process.env.BOOTSTRAP_ADMIN_EMAIL?.trim().toLowerCase()
+  if (!gate || email.trim().toLowerCase() !== gate) {
+    return false
+  }
+  return isBootstrapWindowOpen()
+}
+
+/**
+ * Runs an admin-election transaction with retries. A serialization
+ * failure (SQLSTATE 40001) does not by itself prove a concurrent
+ * claimant committed: both transactions can abort. Retry it like any
+ * other transient failure — a real winner shows up as an existing admin
+ * on the next attempt, and if nobody won the retry completes the
+ * election instead of stranding the instance without an admin.
+ */
+async function withElectionRetry(
+  label: string,
+  run: () => Promise<void>
+): Promise<void> {
+  // Bounded on purpose: the hook runs inside the sign-up (or deletion)
+  // request after the account work already committed, so retrying
+  // forever would hang the response indefinitely. The window is short
+  // but covers transient blips; exhaustion is a repair-needed condition
+  // logged loudly — the election is deterministic, so a single manual
+  // promotion restores the invariant.
+  const maxAttempts = 6
+  for (let attempt = 1; ; attempt++) {
+    try {
+      await run()
+      return
+    } catch (error) {
+      if (attempt >= maxAttempts) {
+        console.error(
+          `${label} failed after ${maxAttempts} attempts — repair needed. ` +
+            'If the instance is now without an admin, promote the intended ' +
+            `account directly: UPDATE "user" SET role = 'admin' ` +
+            "WHERE id = '<account id>'. Later sign-ups cannot take the " +
+            'claim because the election requires the earliest account.',
+          error
+        )
+        return
+      }
+      await new Promise(resolve =>
+        setTimeout(resolve, Math.min(100 * 2 ** (attempt - 1), 500))
+      )
+    }
+  }
+}
+
+/**
+ * Grant the admin role to the very first account.
+ *
+ * The after-create hook runs in its own transaction once the sign-up has
+ * committed, so two concurrent first sign-ups can each observe the other's
+ * committed row: a "no other user exists" condition would make both decline
+ * and leave the instance without any admin. The claim is therefore a
+ * deterministic election — the role goes to the earliest account (createdAt,
+ * tie-broken by id) whenever no admin exists. Exactly one of any set of
+ * concurrent sign-ups can be the earliest, so exactly one account claims the
+ * role regardless of interleaving.
+ *
+ * "No admin exists" alone would allow escalation: if the sole admin later
+ * deletes their account while regular members remain, the next registrant
+ * must not inherit the role — and it cannot be the earliest account, so the
+ * election declines it. Re-bootstrapping then requires removing every
+ * account (the bootstrap window reopens with an empty table) or promoting a
+ * successor directly in the database.
+ */
+export async function claimBootstrapAdmin(userId: string): Promise<void> {
+  // A transient failure here (e.g. the connection drops after the user
+  // insert already committed) must not strand the instance without an
+  // admin: the earliest-account guard means no later sign-up can take the
+  // claim over, so retry before giving up.
+  await withElectionRetry('Bootstrap admin claim', () =>
+    db.transaction(async tx => {
+      await tx.execute(sql`set transaction isolation level serializable`)
+      const [admin] = await tx
+        .select({ id: authSchema.user.id })
+        .from(authSchema.user)
+        .where(eq(authSchema.user.role, 'admin'))
+        .limit(1)
+      if (admin) {
+        return // An admin exists: the bootstrap window is closed
+      }
+      const [earliest] = await tx
+        .select({ id: authSchema.user.id })
+        .from(authSchema.user)
+        .orderBy(asc(authSchema.user.createdAt), asc(authSchema.user.id))
+        .limit(1)
+      if (earliest?.id !== userId) {
+        return // Not the earliest account: another sign-up owns the claim
+      }
+      await tx
+        .update(authSchema.user)
+        .set({ role: 'admin' })
+        .where(eq(authSchema.user.id, userId))
+    })
+  )
+}
+
+/**
+ * Completes the bootstrap election after the last admin account is
+ * deleted. A sign-up that commits while the deletion is in flight sees
+ * the admin row in its own claim and declines; the deletion's locked
+ * count in turn cannot see the uncommitted insert. Running the election
+ * again after the deletion commits closes the window: the sign-up's
+ * claim runs after its insert commits and the re-election runs after
+ * the deletion commits, so neither can miss the other without a
+ * timestamp cycle — at least one of them observes both states and the
+ * earliest account takes the role.
+ */
+export async function reElectBootstrapAdmin(): Promise<void> {
+  await withElectionRetry('Bootstrap admin re-election', () =>
+    db.transaction(async tx => {
+      await tx.execute(sql`set transaction isolation level serializable`)
+      const [admin] = await tx
+        .select({ id: authSchema.user.id })
+        .from(authSchema.user)
+        .where(eq(authSchema.user.role, 'admin'))
+        .limit(1)
+      if (admin) {
+        return // An admin exists: nothing to re-elect
+      }
+      const [earliest] = await tx
+        .select({ id: authSchema.user.id })
+        .from(authSchema.user)
+        .orderBy(asc(authSchema.user.createdAt), asc(authSchema.user.id))
+        .limit(1)
+      if (!earliest) {
+        return // Empty table: the bootstrap window is the recovery path
+      }
+      await tx
+        .update(authSchema.user)
+        .set({ role: 'admin' })
+        .where(eq(authSchema.user.id, earliest.id))
+    })
+  )
+}
+
+/**
+ * Count the rows of the auth user table (live read, no caching).
+ */
+export async function countAuthUsers(): Promise<number> {
+  const [row] = await db.select({ total: count() }).from(authSchema.user)
+  return row?.total ?? 0
+}
+
+/**
+ * Policy gate for implicit account creation through the generic OAuth/OIDC
+ * provider, run by Better Auth's `user.validateUserInfo` seam whenever a
+ * brand-new user record is about to be created. It resolves the live
+ * user-table state on every call, so no gate state needs to be cached,
+ * calibrated or reset across requests: the first account closing the
+ * bootstrap window ends the restriction on the spot, in every process.
+ *
+ * Rules for `oauth`-source `create-user` actions:
+ *
+ * - `AUTH_SIGNUP_MODE=invite` (or an invalid mode): reject — members of
+ *   your IdP tenant are never handed an account implicitly. OIDC sign-in
+ *   works only for an identity already linked to a local account; an
+ *   account created through the credential flow (invitation token) is not
+ *   linked automatically, so invited members sign in with email and
+ *   password.
+ * - Open mode with an empty user table: reject — the first account can
+ *   only come through the credential/bootstrap path, where the emailed
+ *   bootstrap link proves ownership of `BOOTSTRAP_ADMIN_EMAIL`; an OAuth
+ *   callback cannot prove mailbox ownership.
+ * - Open mode otherwise: allow.
+ *
+ * Unaffected: credential sign-ups (invitation and bootstrap-address
+ * policy live in their own flow) and an existing identity signing in
+ * again or linking its account — those passed this gate when their
+ * account was created.
+ *
+ * Fails closed: if the user count cannot be read, the sign-up is
+ * rejected rather than silently allowed (Better Auth surfaces the
+ * returned `error` as a 403 and redirects the callback to its error
+ * endpoint).
+ */
+export async function validateOidcUserCreation(
+  data: {
+    source?: { action?: string; method?: string } | null | undefined
+  },
+  countUsers: () => Promise<number>
+): Promise<{ error: string; errorDescription?: string } | undefined> {
+  const source = data?.source
+  if (!source || source.action !== 'create-user' || source.method !== 'oauth') {
+    return // The gate applies only to new accounts arriving through OAuth.
+  }
+
+  try {
+    if (getSignUpMode() !== 'open') {
+      return {
+        error: 'sign_up_not_allowed',
+        errorDescription:
+          'Registration is by invitation. Sign in if you already have an account.'
+      }
+    }
+  } catch (error) {
+    console.warn('AUTH_SIGNUP_MODE is invalid — OIDC sign-up rejected.', error)
+    return {
+      error: 'sign_up_unavailable',
+      errorDescription: 'User registration is not available.'
+    }
+  }
+
+  try {
+    if ((await countUsers()) === 0) {
+      return {
+        error: 'bootstrap_window_open',
+        errorDescription:
+          'The first account of this deployment must be created through its emailed bootstrap link.'
+      }
+    }
+  } catch (error) {
+    console.warn(
+      'Could not read the user table to validate OIDC sign-up ' +
+        '(bootstrap window unknown) — rejecting the registration.',
+      error
+    )
+    return {
+      error: 'sign_up_unavailable',
+      errorDescription:
+        'Registration cannot be validated right now, please try again.'
+    }
+  }
+
+  return undefined
+}
+
+function createAuth() {
+  const smtpConfigured = isBetterAuthSmtpConfigured()
+  const oidcConfigured = isOidcConfigured()
+
+  // Conditionally spread the OIDC plugin inline so the concrete plugin
+  // types reach betterAuth(): a `plugins: any[]` assertion would strip
+  // every declared endpoint (e.g. admin's setRole/setUserPassword) from
+  // the inferred auth.api type.
+  const oidcPlugins = oidcConfigured
+    ? [
+        genericOAuth({
+          config: [
+            {
+              // The provider id the plugin registers and the IdP callback
+              // URL is derived from (OIDC_PROVIDER_ID, default 'oidc').
+              providerId: getOidcProviderId(),
+              // Trailing slash is a common typo: without stripping, the
+              // discovery URL becomes "...//.well-known/..." and most IdPs
+              // answer 404, which better-auth reports as "discovery left no
+              // usable authorization endpoint or token exchange".
+              discoveryUrl: `${process.env.OIDC_ISSUER?.trim().replace(/\/+$/, '')}/.well-known/openid-configuration`,
+              clientId: process.env.OIDC_CLIENT_ID?.trim() ?? '',
+              clientSecret: process.env.OIDC_CLIENT_SECRET?.trim() ?? '',
+              scopes: (
+                process.env.OIDC_SCOPE?.trim() || 'openid profile email'
+              ).split(' '),
+              pkce: true,
+              // Map OIDC claims to Better Auth user fields
+              // Note: Do not map 'id' here - Better Auth gets user identity from
+              // the accountSubject (OIDC 'sub' claim) automatically
+              mapProfileToUser: profile => ({
+                email: profile.email as string,
+                emailVerified: (profile.email_verified ?? false) as boolean,
+                name: (profile.name ||
+                  profile.preferred_username ||
+                  profile.email) as string,
+                image: profile.picture as string | undefined
+              })
+            }
+          ]
+        })
+      ]
+    : []
+
+  // nextCookies must stay last: it re-applies the session cookie
+  // through next/headers so server actions (signIn/signUp/signOut)
+  // deliver it to the browser without a hand-written header copy.
+
+  return betterAuth({
+    appName: 'Hawkin',
+    secret: getSecret(),
+    database: drizzleAdapter(db, { provider: 'pg', schema: authSchema }),
+    emailAndPassword: {
+      enabled: true,
+      // better-auth 1.7 removed the built-in nodemailer transport: without
+      // this callback, requestPasswordReset fails with RESET_PASSWORD_DISABLED
+      // even when the SMTP variables are present. Hawkin does not use email
+      // verification, so this is the only email better-auth delivers;
+      // invitation mail goes through lib/actions/admin.ts.
+      sendResetPassword: smtpConfigured
+        ? async ({ user, token }) => {
+            // better-auth's generated url targets its own
+            // /api/auth/reset-password/:token endpoint, which this app does
+            // not expose (the mounted HTTP surface is restricted to provider
+            // callbacks, see app/api/auth/[...all]/route.ts), so it would 404.
+            // Link the in-app page directly with the raw token instead; it
+            // resets the password through the provider's server action.
+            const origin = getEmailLinkOrigin()
+            if (!origin) {
+              // Without a canonical origin the link could only be built
+              // from caller-controlled headers: fail loudly rather than
+              // deliver a live credential to the wrong host.
+              throw new Error(
+                'BETTER_AUTH_URL must be set to deliver password reset emails'
+              )
+            }
+            const link = `${origin}/auth/update-password?token=${token}`
+            await sendSmtpMail({
+              to: user.email,
+              subject: 'Reset your Hawkin password',
+              text: `Use this link to reset your password (valid for one hour): ${link}`,
+              html: `<p>Use this link to reset your password (valid for one hour):</p><p><a href="${link}">Reset password</a></p>`
+            })
+          }
+        : undefined
+    },
+    plugins: [admin({ defaultRole: 'user' }), ...oidcPlugins, nextCookies()],
+    user: {
+      // Policy gate for implicit account creation through the generic
+      // OAuth/OIDC provider (sign-up mode + bootstrap window). Runs at
+      // user-creation time against the live user table (see
+      // validateOidcUserCreation), so no cached gate state is needed.
+      validateUserInfo: (data, context) =>
+        validateOidcUserCreation(data, countAuthUsers)
+    },
+    databaseHooks: {
+      user: {
+        create: {
+          before: async user => applyBootstrapAdminGate(user),
+          after: async user => {
+            await claimBootstrapAdmin(user.id)
+          }
+        }
+      }
+    }
+  })
+}
+
+export type BetterAuth = ReturnType<typeof createAuth>
+
+let authInstance: BetterAuth | null = null
+
+/** Lazily create the shared Better Auth instance. */
+/** Lazily create the shared Better Auth instance. */
+export function getAuth(): BetterAuth {
+  if (!authInstance) {
+    authInstance = createAuth()
+  }
+  return authInstance
+}
+
+/** Test seam: reset the memoized instance after changing env vars. */
+export function resetAuthInstance(): void {
+  authInstance = null
+}

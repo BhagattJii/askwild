@@ -1,0 +1,1076 @@
+'use server'
+
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  gt,
+  ilike,
+  inArray,
+  lt,
+  or,
+  sql
+} from 'drizzle-orm'
+
+import { HL_START, HL_STOP } from '@/lib/render/highlight-markers'
+import type { UIMessage } from '@/lib/types/ai'
+import type { PersistableUIMessage } from '@/lib/types/message-persistence'
+import {
+  buildUIMessageFromDB,
+  mapUIMessagePartsToDBParts,
+  mapUIMessageToDBMessage
+} from '@/lib/utils/message-mapping'
+import { perfLog, perfTime } from '@/lib/utils/perf-logging'
+import { incrementDbOperationCount } from '@/lib/utils/perf-tracking'
+import {
+  MIN_QUERY_LENGTH,
+  normalizeSearchQuery
+} from '@/lib/utils/search-query'
+
+import type {
+  Chat,
+  LibraryFile,
+  Message,
+  NewLibraryFile,
+  NewNote,
+  Note
+} from './schema'
+import {
+  chats,
+  feedback,
+  generateId,
+  libraryFiles,
+  messages,
+  notes,
+  parts
+} from './schema'
+import { withOptionalRLS, withRLS } from './with-rls'
+import { db } from '.'
+
+/**
+ * Create a new chat
+ */
+export async function createChat({
+  id = generateId(),
+  title,
+  userId,
+  visibility = 'private'
+}: {
+  id?: string
+  title: string
+  userId: string
+  visibility?: 'public' | 'private'
+}): Promise<Chat> {
+  return withRLS(userId, async tx => {
+    const [chat] = await tx
+      .insert(chats)
+      .values({
+        id,
+        title,
+        userId,
+        visibility
+      })
+      .returning()
+
+    return chat
+  })
+}
+
+/**
+ * Get chat by ID with permission check
+ */
+export async function getChat(
+  chatId: string,
+  userId?: string
+): Promise<Chat | null> {
+  // For public chats or when no userId, use regular db connection
+  // For private chats with userId, use RLS
+  return withOptionalRLS(userId || null, async tx => {
+    const [chat] = await tx
+      .select()
+      .from(chats)
+      .where(eq(chats.id, chatId))
+      .limit(1)
+
+    if (!chat) {
+      return null
+    }
+
+    // Additional permission check for backward compatibility
+    if (chat.visibility === 'public') {
+      return chat
+    }
+
+    if (chat.visibility === 'private' && userId && chat.userId === userId) {
+      return chat
+    }
+
+    return null
+  })
+}
+
+/**
+ * Upsert a message with its parts
+ * Note: This function should be called with appropriate userId context
+ */
+export async function upsertMessage(
+  message: PersistableUIMessage & { chatId: string },
+  userId?: string
+): Promise<Message> {
+  const count = incrementDbOperationCount()
+  perfLog(`DB - upsertMessage called - count: ${count}`)
+
+  // Use RLS if userId is provided, otherwise use regular db
+  const executeFn = userId
+    ? (callback: (tx: any) => Promise<Message>) => withRLS(userId, callback)
+    : (callback: (tx: any) => Promise<Message>) => db.transaction(callback)
+
+  const result = await executeFn(async tx => {
+    // 1. Insert or update the message
+    const messageData = mapUIMessageToDBMessage(message)
+    const [dbMessage] = await tx
+      .insert(messages)
+      .values(messageData)
+      .onConflictDoUpdate({
+        target: messages.id,
+        set: { role: messageData.role }
+      })
+      .returning()
+
+    // 2. Delete existing parts
+    await tx.delete(parts).where(eq(parts.messageId, message.id))
+
+    // 3. Insert new parts
+    if (message.parts && message.parts.length > 0) {
+      const dbParts = mapUIMessagePartsToDBParts(message.parts, message.id)
+      if (dbParts.length > 0) {
+        await tx.insert(parts).values(dbParts)
+      }
+    }
+
+    return dbMessage
+  })
+
+  return result
+}
+
+/**
+ * Load chat messages with parts
+ * Note: Caller should verify chat access permissions before calling this
+ */
+export async function loadChat(
+  chatId: string,
+  userId?: string
+): Promise<UIMessage[]> {
+  return withOptionalRLS(userId || null, async tx => {
+    // Use Drizzle's query API with relations. The tsvector columns are
+    // projected out: they are only used by the search SQL and would
+    // otherwise be transported on every chat open.
+    const result = await tx.query.messages.findMany({
+      where: eq(messages.chatId, chatId),
+      with: {
+        parts: {
+          columns: {
+            search: false,
+            searchReasoning: false
+          },
+          orderBy: [asc(parts.order)]
+        }
+      },
+      orderBy: [asc(messages.createdAt)]
+    })
+
+    // Convert to UI format
+    return result.map(msg => buildUIMessageFromDB(msg, msg.parts))
+  })
+}
+
+/**
+ * Load chat with messages in a single query (optimized)
+ */
+export async function loadChatWithMessages(
+  chatId: string,
+  userId?: string
+): Promise<(Chat & { messages: UIMessage[] }) | null> {
+  const count = incrementDbOperationCount()
+  perfLog(`DB - loadChatWithMessages called - count: ${count}`)
+
+  return withOptionalRLS(userId || null, async tx => {
+    // Get chat and messages in parallel
+    const [chatResult, messagesResult] = await Promise.all([
+      tx.select().from(chats).where(eq(chats.id, chatId)).limit(1),
+      tx.query.messages.findMany({
+        where: eq(messages.chatId, chatId),
+        with: {
+          parts: {
+            columns: {
+              search: false,
+              searchReasoning: false
+            },
+            orderBy: [asc(parts.order)]
+          }
+        },
+        orderBy: [asc(messages.createdAt)]
+      })
+    ])
+
+    const chat = chatResult[0]
+    if (!chat) {
+      return null
+    }
+
+    // Permission check for backward compatibility
+    if (chat.visibility === 'private' && (!userId || chat.userId !== userId)) {
+      return null
+    }
+
+    // Build result
+    const uiMessages = messagesResult.map(msg =>
+      buildUIMessageFromDB(msg, msg.parts)
+    )
+    return { ...chat, messages: uiMessages }
+  })
+}
+
+export async function getUserMessageIds(
+  chatId: string,
+  userId?: string
+): Promise<string[]> {
+  const count = incrementDbOperationCount()
+  perfLog(`DB - getUserMessageIds called - count: ${count}`)
+
+  return withOptionalRLS(userId || null, async tx => {
+    const [chat] = await tx
+      .select()
+      .from(chats)
+      .where(eq(chats.id, chatId))
+      .limit(1)
+
+    if (!chat) {
+      return []
+    }
+
+    if (chat.visibility === 'private' && (!userId || chat.userId !== userId)) {
+      return []
+    }
+
+    const userMessages = await tx
+      .select({ id: messages.id })
+      .from(messages)
+      .where(and(eq(messages.chatId, chatId), eq(messages.role, 'user')))
+
+    return userMessages.map(message => message.id)
+  })
+}
+
+/**
+ * Delete messages after a specific message
+ */
+export async function deleteMessagesAfter(
+  chatId: string,
+  messageId: string,
+  userId?: string
+): Promise<{ count: number }> {
+  return withOptionalRLS(userId || null, async tx => {
+    // Get the message's timestamp
+    const [targetMessage] = await tx
+      .select({ createdAt: messages.createdAt })
+      .from(messages)
+      .where(eq(messages.id, messageId))
+      .limit(1)
+
+    if (!targetMessage) {
+      return { count: 0 }
+    }
+
+    // Find messages to delete
+    const messagesToDelete = await tx
+      .select({ id: messages.id })
+      .from(messages)
+      .where(
+        and(
+          eq(messages.chatId, chatId),
+          gt(messages.createdAt, targetMessage.createdAt)
+        )
+      )
+
+    const messageIds = messagesToDelete.map(m => m.id)
+
+    if (messageIds.length > 0) {
+      // Delete messages (parts will be cascade deleted)
+      await tx.delete(messages).where(inArray(messages.id, messageIds))
+    }
+
+    return { count: messageIds.length }
+  })
+}
+
+/**
+ * Delete messages from a specific index
+ */
+export async function deleteMessagesFromIndex(
+  chatId: string,
+  messageId: string,
+  userId?: string
+): Promise<{ count: number }> {
+  return withOptionalRLS(userId || null, async tx => {
+    // Get all messages for the chat
+    const allMessages = await tx
+      .select({ id: messages.id, createdAt: messages.createdAt })
+      .from(messages)
+      .where(eq(messages.chatId, chatId))
+      .orderBy(asc(messages.createdAt))
+
+    // Find the index of the target message
+    const messageIndex = allMessages.findIndex(m => m.id === messageId)
+
+    if (messageIndex === -1) {
+      return { count: 0 }
+    }
+
+    // Get messages to delete (from index onwards)
+    const messagesToDelete = allMessages.slice(messageIndex)
+    const messageIds = messagesToDelete.map(m => m.id)
+
+    if (messageIds.length > 0) {
+      await tx.delete(messages).where(inArray(messages.id, messageIds))
+    }
+
+    return { count: messageIds.length }
+  })
+}
+
+/**
+ * Get all chats for a user
+ */
+export async function getChats(userId: string): Promise<Chat[]> {
+  return withRLS(userId, async tx => {
+    return tx
+      .select()
+      .from(chats)
+      .where(eq(chats.userId, userId))
+      .orderBy(desc(chats.createdAt))
+  })
+}
+
+/**
+ * Get chats with pagination
+ */
+export async function getChatsPage(
+  userId: string,
+  limit = 20,
+  offset = 0
+): Promise<{ chats: Chat[]; nextOffset: number | null }> {
+  try {
+    return withRLS(userId, async tx => {
+      const results = await tx
+        .select()
+        .from(chats)
+        .where(eq(chats.userId, userId))
+        .orderBy(desc(chats.createdAt))
+        .limit(limit)
+        .offset(offset)
+
+      const nextOffset = results.length === limit ? offset + limit : null
+
+      return {
+        chats: results,
+        nextOffset
+      }
+    })
+  } catch (error) {
+    console.error('Error fetching chat page:', error)
+    return { chats: [], nextOffset: null }
+  }
+}
+
+/**
+ * Search chat titles for a user (case-insensitive substring match), newest first.
+ */
+export async function searchChatTitles(
+  userId: string,
+  query: string,
+  limit = 20
+): Promise<Chat[]> {
+  const trimmed = normalizeSearchQuery(query)
+  if (!trimmed) {
+    return []
+  }
+  // Escape ILIKE wildcards so user input matches literally
+  const pattern = `%${escapeLikePattern(trimmed)}%`
+
+  return withRLS(userId, async tx => {
+    return tx
+      .select()
+      .from(chats)
+      .where(and(eq(chats.userId, userId), ilike(chats.title, pattern)))
+      .orderBy(desc(chats.createdAt))
+      .limit(Math.max(1, Math.min(limit, 50)))
+  })
+}
+
+export type ChatContentSearchResult = {
+  chatId: string
+  title: string
+  snippet: string
+}
+
+// Whitelisted column pairs for the full-text search scopes (never user input)
+const FTS_SCOPES = {
+  content: { tsvectorColumn: 'search', textColumn: 'text_text' },
+  reasoning: {
+    tsvectorColumn: 'search_reasoning',
+    textColumn: 'reasoning_text'
+  }
+} as const
+
+// Keep in sync with the generated tsvector columns in lib/db/schema.ts:
+// only the first 100k characters of a part are indexed, so matches can
+// only exist inside that prefix. ts_headline must tokenize the same
+// bounded document, or oversized parts make every search pay CPU and
+// memory in proportion to text that can never match.
+const FTS_TEXT_CAP = 100_000
+
+type FtsSearchScope = keyof typeof FTS_SCOPES
+
+/**
+ * Full-text search over message parts of the user's chats.
+ * The tsquery is built from the FTS parser's own lexemes (language-neutral
+ * `simple` config): each query word becomes an OR group of a forward prefix
+ * (`word:*`) plus its exact proper prefixes of at least 3 characters, so
+ * "chats" also finds "chat". Keeps the best-scoring part per chat (DISTINCT ON
+ * + ts_rank), with a ts_headline snippet containing <b></b> highlight markers.
+ * Ties on rank are broken by newest chat first.
+ */
+async function searchChatParts(
+  userId: string,
+  query: string,
+  limit: number,
+  scope: FtsSearchScope
+): Promise<ChatContentSearchResult[]> {
+  const trimmed = normalizeSearchQuery(query)
+  if (!trimmed) {
+    return []
+  }
+
+  const { tsvectorColumn, textColumn } = FTS_SCOPES[scope]
+  const tsvectorCol = sql.identifier(tsvectorColumn)
+  const textCol = sql.identifier(textColumn)
+  const pageLimit = Math.max(1, Math.min(limit, 50))
+
+  return withRLS(userId, async tx => {
+    const rows = await tx.execute<{
+      chat_id: string
+      title: string
+      snippet: string
+    }>(sql`
+      WITH fts_query AS (
+        SELECT ('(' || string_agg(
+          '(' || quote_nullable(l) || ':*' ||
+          coalesce((SELECT string_agg(' | ' || quote_nullable(left(l, g)), '' ORDER BY g)
+                    FROM generate_series(3, length(l) - 1) g), '') || ')',
+          ' & ') || ')')::tsquery AS q
+        FROM unnest(tsvector_to_array(to_tsvector('simple', ${trimmed}))) l
+        -- The parser can drop punctuation, so the raw-length minimum does
+        -- not bound the parsed lexemes: require at least one lexeme of the
+        -- minimum length or the query becomes a broad single-character
+        -- prefix scan (empty lexeme set yields NULL q via the aggregate).
+        HAVING bool_or(length(l) >= ${MIN_QUERY_LENGTH})
+      ),
+      ranked AS (
+        SELECT DISTINCT ON (c.id)
+          c.id AS chat_id,
+          c.title AS title,
+          c.created_at AS chat_created_at,
+          ts_rank(p.${tsvectorCol}, fts_query.q) AS match_rank,
+          ts_headline(
+            'simple',
+            left(coalesce(p.${textCol}, ''), ${FTS_TEXT_CAP}),
+            fts_query.q,
+            ${`MaxWords=14, MinWords=7, StartSel=${HL_START}, StopSel=${HL_STOP}`}
+          ) AS snippet
+        FROM fts_query
+        CROSS JOIN ${parts} p
+        JOIN ${messages} msg ON msg.id = p.message_id
+        JOIN ${chats} c ON c.id = msg.chat_id
+        WHERE c.user_id = ${userId}
+          AND p.${tsvectorCol} @@ fts_query.q
+        ORDER BY c.id, match_rank DESC, p.id
+      )
+      SELECT chat_id, title, snippet
+      FROM ranked
+      ORDER BY match_rank DESC, chat_created_at DESC
+      LIMIT ${pageLimit}
+    `)
+
+    return (rows as unknown as Array<Record<string, string>>).map(row => ({
+      chatId: row.chat_id,
+      title: row.title,
+      snippet: row.snippet
+    }))
+  })
+}
+
+/**
+ * Full-text search over user/assistant message text of the user's chats.
+ */
+export async function searchChatContent(
+  userId: string,
+  query: string,
+  limit = 20
+): Promise<ChatContentSearchResult[]> {
+  return searchChatParts(userId, query, limit, 'content')
+}
+
+/**
+ * Full-text search over stored reasoning output of the user's chats.
+ */
+export async function searchChatReasoning(
+  userId: string,
+  query: string,
+  limit = 10
+): Promise<ChatContentSearchResult[]> {
+  return searchChatParts(userId, query, limit, 'reasoning')
+}
+
+/**
+ * Delete a chat
+ */
+export async function deleteChat(
+  chatId: string,
+  userId: string
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    return withRLS(userId, async tx => {
+      // Verify ownership
+      const [chat] = await tx
+        .select()
+        .from(chats)
+        .where(eq(chats.id, chatId))
+        .limit(1)
+
+      if (!chat || chat.userId !== userId) {
+        return { success: false, error: 'Unauthorized' }
+      }
+
+      // Delete the chat (messages and parts will cascade)
+      await tx.delete(chats).where(eq(chats.id, chatId))
+
+      return { success: true }
+    })
+  } catch (error) {
+    console.error('Error deleting chat:', error)
+    return { success: false, error: 'Failed to delete chat' }
+  }
+}
+
+/**
+ * Delete all chats for a user.
+ * Messages and parts are removed by database cascades.
+ */
+export async function deleteUserChats(
+  userId: string
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    return withRLS(userId, async tx => {
+      await tx.delete(chats).where(eq(chats.userId, userId))
+      return { success: true }
+    })
+  } catch (error) {
+    console.error('Error deleting user chats:', error)
+    return { success: false, error: 'Failed to delete user chats' }
+  }
+}
+
+export async function createNote(
+  note: Omit<NewNote, 'id' | 'createdAt' | 'updatedAt'>
+): Promise<Note> {
+  return withRLS(note.userId, async tx => {
+    const [createdNote] = await tx.insert(notes).values(note).returning()
+
+    return createdNote
+  })
+}
+
+export type NotesPageCursor = {
+  updatedAt: string
+  id: string
+}
+
+export async function getNotes(
+  userId: string,
+  {
+    limit = 25,
+    cursor
+  }: {
+    limit?: number
+    cursor?: NotesPageCursor
+  } = {}
+): Promise<{
+  notes: Note[]
+  nextCursor: NotesPageCursor | null
+  hasMore: boolean
+}> {
+  return withRLS(userId, async tx => {
+    const cursorDate = cursor ? new Date(cursor.updatedAt) : null
+    const pageLimit = Math.max(1, Math.min(limit, 50))
+    const results = await tx
+      .select()
+      .from(notes)
+      .where(
+        and(
+          eq(notes.userId, userId),
+          cursor && cursorDate && !Number.isNaN(cursorDate.getTime())
+            ? or(
+                lt(notes.updatedAt, cursorDate),
+                and(eq(notes.updatedAt, cursorDate), lt(notes.id, cursor.id))
+              )
+            : undefined
+        )
+      )
+      .orderBy(desc(notes.updatedAt), desc(notes.id))
+      .limit(pageLimit + 1)
+
+    const pageNotes = results.slice(0, pageLimit)
+    const lastNote = pageNotes[pageNotes.length - 1]
+
+    return {
+      notes: pageNotes,
+      nextCursor:
+        results.length > pageLimit && lastNote
+          ? {
+              updatedAt: lastNote.updatedAt.toISOString(),
+              id: lastNote.id
+            }
+          : null,
+      hasMore: results.length > pageLimit
+    }
+  })
+}
+
+export async function searchNotes(
+  userId: string,
+  query: string,
+  { limit = 20 }: { limit?: number } = {}
+): Promise<Note[]> {
+  return withRLS(userId, async tx => {
+    const trimmed = query.trim()
+    const pageLimit = Math.max(1, Math.min(limit, 50))
+
+    return tx
+      .select()
+      .from(notes)
+      .where(
+        and(
+          eq(notes.userId, userId),
+          trimmed ? ilike(notes.title, `%${trimmed}%`) : undefined
+        )
+      )
+      .orderBy(desc(notes.updatedAt), desc(notes.id))
+      .limit(pageLimit)
+  })
+}
+
+export async function getNote(
+  noteId: string,
+  userId: string
+): Promise<Note | null> {
+  return withRLS(userId, async tx => {
+    const [note] = await tx
+      .select()
+      .from(notes)
+      .where(and(eq(notes.id, noteId), eq(notes.userId, userId)))
+      .limit(1)
+
+    return note ?? null
+  })
+}
+
+export async function deleteNote(
+  noteId: string,
+  userId: string
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    return withRLS(userId, async tx => {
+      const [deletedNote] = await tx
+        .delete(notes)
+        .where(and(eq(notes.id, noteId), eq(notes.userId, userId)))
+        .returning({ id: notes.id })
+
+      if (!deletedNote) {
+        return { success: false, error: 'Note not found' }
+      }
+
+      return { success: true }
+    })
+  } catch (error) {
+    console.error('Error deleting note:', error)
+    return { success: false, error: 'Failed to delete note' }
+  }
+}
+
+export async function deleteUserNotes(
+  userId: string
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    return withRLS(userId, async tx => {
+      await tx.delete(notes).where(eq(notes.userId, userId))
+      return { success: true }
+    })
+  } catch (error) {
+    console.error('Error deleting user notes:', error)
+    return { success: false, error: 'Failed to delete user notes' }
+  }
+}
+
+const CHAT_FILE_CANDIDATE_LIMIT = 5
+const ATTACHMENT_SIZE_LOOKUP_LIMIT = 100
+
+function escapeLikePattern(value: string) {
+  return value.replace(/[\\%_]/g, char => `\\${char}`)
+}
+
+/**
+ * Files already stored under this chat's object prefix that could be the one
+ * being uploaded, newest first.
+ *
+ * Candidates only: name, media type and size are metadata, so the caller has to
+ * confirm the bytes. More than one can match, and returning just the newest
+ * would keep re-uploading two same-sized versions of a file against each other.
+ *
+ * Matched on the object key prefix rather than on `chat_id`, because the column
+ * is not reliable for this. A file attached to a brand-new chat is uploaded
+ * before the chat row exists, and `createLibraryFile` stores it with a null
+ * `chat_id`; deleting a chat nulls it too. The key always carries the chat it
+ * was uploaded under.
+ *
+ * Staying inside one chat's prefix is the point: a chat deletion wipes that
+ * prefix, so reusing a key across chats would let one chat's deletion break
+ * another's attachment.
+ */
+export async function findChatFileCandidates({
+  userId,
+  chatKeyPrefix,
+  filename,
+  mediaType,
+  size
+}: {
+  userId: string
+  chatKeyPrefix: string
+  filename: string
+  mediaType: string
+  size: number
+}): Promise<LibraryFile[]> {
+  return withRLS(userId, async tx =>
+    tx
+      .select()
+      .from(libraryFiles)
+      .where(
+        and(
+          eq(libraryFiles.userId, userId),
+          eq(libraryFiles.filename, filename),
+          eq(libraryFiles.mediaType, mediaType),
+          eq(libraryFiles.size, size),
+          sql`${libraryFiles.objectKey} LIKE ${`${escapeLikePattern(chatKeyPrefix)}%`} ESCAPE '\\'`
+        )
+      )
+      .orderBy(desc(libraryFiles.createdAt))
+      .limit(CHAT_FILE_CANDIDATE_LIMIT)
+  )
+}
+
+export async function getAttachmentSizesByObjectKey({
+  userId,
+  objectKeys
+}: {
+  userId: string
+  objectKeys: string[]
+}): Promise<Map<string, number>> {
+  if (objectKeys.length === 0) return new Map()
+
+  const boundedKeys = objectKeys.slice(0, ATTACHMENT_SIZE_LOOKUP_LIMIT)
+  const rows = await withRLS(userId, async tx =>
+    tx
+      .select({
+        objectKey: libraryFiles.objectKey,
+        size: libraryFiles.size
+      })
+      .from(libraryFiles)
+      .where(
+        and(
+          eq(libraryFiles.userId, userId),
+          inArray(libraryFiles.objectKey, boundedKeys)
+        )
+      )
+  )
+
+  return new Map(
+    rows.flatMap(row =>
+      row.size === null ? [] : [[row.objectKey, row.size] as const]
+    )
+  )
+}
+
+export async function createLibraryFile(
+  file: Omit<NewLibraryFile, 'id' | 'createdAt' | 'updatedAt'>
+): Promise<LibraryFile> {
+  return withRLS(file.userId, async tx => {
+    let chatId = file.chatId ?? null
+
+    if (chatId) {
+      const [chat] = await tx
+        .select({ id: chats.id })
+        .from(chats)
+        .where(and(eq(chats.id, chatId), eq(chats.userId, file.userId)))
+        .limit(1)
+
+      chatId = chat ? chatId : null
+    }
+
+    const [createdFile] = await tx
+      .insert(libraryFiles)
+      .values({ ...file, chatId })
+      .returning()
+
+    return createdFile
+  })
+}
+
+export type FilesPageCursor = {
+  updatedAt: string
+  id: string
+}
+
+export async function getLibraryFiles(
+  userId: string,
+  {
+    limit = 25,
+    cursor
+  }: {
+    limit?: number
+    cursor?: FilesPageCursor
+  } = {}
+): Promise<{
+  files: LibraryFile[]
+  nextCursor: FilesPageCursor | null
+  hasMore: boolean
+}> {
+  return withRLS(userId, async tx => {
+    const cursorDate = cursor ? new Date(cursor.updatedAt) : null
+    const pageLimit = Math.max(1, Math.min(limit, 50))
+    const results = await tx
+      .select()
+      .from(libraryFiles)
+      .where(
+        and(
+          eq(libraryFiles.userId, userId),
+          cursor && cursorDate && !Number.isNaN(cursorDate.getTime())
+            ? or(
+                lt(libraryFiles.updatedAt, cursorDate),
+                and(
+                  eq(libraryFiles.updatedAt, cursorDate),
+                  lt(libraryFiles.id, cursor.id)
+                )
+              )
+            : undefined
+        )
+      )
+      .orderBy(desc(libraryFiles.updatedAt), desc(libraryFiles.id))
+      .limit(pageLimit + 1)
+
+    const pageFiles = results.slice(0, pageLimit)
+    const lastFile = pageFiles[pageFiles.length - 1]
+
+    return {
+      files: pageFiles,
+      nextCursor:
+        results.length > pageLimit && lastFile
+          ? {
+              updatedAt: lastFile.updatedAt.toISOString(),
+              id: lastFile.id
+            }
+          : null,
+      hasMore: results.length > pageLimit
+    }
+  })
+}
+
+export async function searchLibraryFiles(
+  userId: string,
+  query: string,
+  { limit = 20 }: { limit?: number } = {}
+): Promise<LibraryFile[]> {
+  return withRLS(userId, async tx => {
+    const trimmed = query.trim()
+    const pageLimit = Math.max(1, Math.min(limit, 50))
+
+    return tx
+      .select()
+      .from(libraryFiles)
+      .where(
+        and(
+          eq(libraryFiles.userId, userId),
+          trimmed ? ilike(libraryFiles.filename, `%${trimmed}%`) : undefined
+        )
+      )
+      .orderBy(desc(libraryFiles.updatedAt), desc(libraryFiles.id))
+      .limit(pageLimit)
+  })
+}
+
+export async function deleteLibraryFile(
+  fileId: string,
+  userId: string
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    return withRLS(userId, async tx => {
+      const [deletedFile] = await tx
+        .delete(libraryFiles)
+        .where(
+          and(eq(libraryFiles.id, fileId), eq(libraryFiles.userId, userId))
+        )
+        .returning({ id: libraryFiles.id })
+
+      if (!deletedFile) {
+        return { success: false, error: 'File not found' }
+      }
+
+      return { success: true }
+    })
+  } catch (error) {
+    console.error('Error deleting library file:', error)
+    return { success: false, error: 'Failed to delete file' }
+  }
+}
+
+export async function deleteUserLibraryFiles(
+  userId: string
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    return withRLS(userId, async tx => {
+      await tx.delete(libraryFiles).where(eq(libraryFiles.userId, userId))
+      return { success: true }
+    })
+  } catch (error) {
+    console.error('Error deleting user library files:', error)
+    return { success: false, error: 'Failed to delete user files' }
+  }
+}
+
+/**
+ * Remove account linkage from feedback while retaining the feedback content.
+ */
+export async function anonymizeUserFeedback(
+  userId: string
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    return withRLS(userId, async tx => {
+      await tx
+        .update(feedback)
+        .set({ userId: null })
+        .where(eq(feedback.userId, userId))
+
+      return { success: true }
+    })
+  } catch (error) {
+    console.error('Error anonymizing user feedback:', error)
+    return { success: false, error: 'Failed to anonymize user feedback' }
+  }
+}
+
+/**
+ * Update chat visibility
+ */
+export async function updateChatVisibility(
+  chatId: string,
+  userId: string,
+  visibility: 'public' | 'private'
+): Promise<Chat | null> {
+  return withRLS(userId, async tx => {
+    const chat = await getChat(chatId, userId)
+    if (!chat || chat.userId !== userId) {
+      return null
+    }
+
+    const [updatedChat] = await tx
+      .update(chats)
+      .set({ visibility })
+      .where(eq(chats.id, chatId))
+      .returning()
+
+    return updatedChat
+  })
+}
+
+/**
+ * Update chat title
+ */
+export async function updateChatTitle(
+  chatId: string,
+  title: string,
+  userId?: string
+): Promise<Chat | null> {
+  return withOptionalRLS(userId || null, async tx => {
+    const [updatedChat] = await tx
+      .update(chats)
+      .set({ title })
+      .where(eq(chats.id, chatId))
+      .returning()
+
+    return updatedChat || null
+  })
+}
+
+/**
+ * Create a chat with the first message in a single transaction
+ * Optimized for new chat creation
+ */
+export async function createChatWithFirstMessageTransaction({
+  chatId,
+  chatTitle,
+  userId,
+  message
+}: {
+  chatId: string
+  chatTitle: string
+  userId: string
+  message: PersistableUIMessage
+}): Promise<{ chat: Chat; message: Message }> {
+  perfLog(`DB - createChatWithFirstMessageTransaction start`)
+  const dbStart = performance.now()
+  return await withRLS(userId, async tx => {
+    // 1. Create chat
+    const [chat] = await tx
+      .insert(chats)
+      .values({
+        id: chatId,
+        title: chatTitle.substring(0, 255),
+        userId,
+        visibility: 'private',
+        createdAt: new Date()
+      })
+      .returning()
+
+    // 2. Save message
+    const dbMessage = mapUIMessageToDBMessage({ ...message, chatId })
+    const [savedMessage] = await tx
+      .insert(messages)
+      .values(dbMessage)
+      .returning()
+
+    // 3. Save parts if they exist
+    if (message.parts && message.parts.length > 0) {
+      const partsData = mapUIMessagePartsToDBParts(
+        message.parts,
+        savedMessage.id
+      )
+      if (partsData.length > 0) {
+        await tx.insert(parts).values(partsData)
+      }
+    }
+
+    perfTime('DB - createChatWithFirstMessageTransaction completed', dbStart)
+    return { chat, message: savedMessage }
+  })
+}

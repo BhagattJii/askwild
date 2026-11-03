@@ -1,0 +1,28 @@
+{
+  "version": 2,
+  "models": {
+    "quick": {
+      "id": "gpt-6-luna",
+      "name": "GPT-6 Luna",
+      "provider": "OpenAI",
+      "providerId": "openai",
+      "providerOptions": {
+        "openai": {
+          "reasoningEffort": "none"
+        }
+      }
+    },
+    "adaptive": {
+      "id": "gpt-6-luna",
+      "name": "GPT-6 Luna",
+      "provider": "OpenAI",
+      "providerId": "openai",
+      "providerOptions": {
+        "openai": {
+          "reasoningEffort": "low",
+          "reasoningSummary": "auto"
+        }
+      }
+    }
+  }
+}

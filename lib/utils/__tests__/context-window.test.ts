@@ -1,0 +1,409 @@
+import { ModelMessage } from 'ai'
+import { getEncoding } from 'js-tiktoken'
+import { describe, expect, test } from 'vitest'
+
+import { Model } from '@/lib/types/models'
+
+import {
+  countTextTokens,
+  getMaxAllowedTokens,
+  shouldTruncateMessages,
+  truncateMessages
+} from '../context-window'
+
+describe('context-window', () => {
+  describe('countTextTokens', () => {
+    test('counts gpt-6-luna text with the o200k tokenizer', () => {
+      const text = 'مرحبا بك في هذا البحث عن الطاقة المتجددة. '.repeat(50)
+      const tokens = countTextTokens(text, 'gpt-6-luna')
+
+      expect(tokens).toBe(getEncoding('o200k_base').encode(text).length)
+      expect(tokens).toBeLessThan(
+        getEncoding('cl100k_base').encode(text).length
+      )
+    })
+  })
+
+  const mockModel: Model = {
+    id: 'gpt-4o-mini',
+    name: 'GPT-4o mini',
+    provider: 'OpenAI',
+    providerId: 'openai'
+  }
+
+  const createMessage = (
+    role: 'user' | 'assistant',
+    content: string
+  ): ModelMessage => ({
+    role,
+    content
+  })
+
+  describe('getMaxAllowedTokens', () => {
+    test('calculates max tokens correctly for known model', () => {
+      const maxTokens = getMaxAllowedTokens(mockModel)
+      // Expected: (128000 - 16384) - (128000 * 0.1) = 111616 - 12800 = 98816
+      expect(maxTokens).toBe(98816)
+    })
+
+    test('uses the snapshot context window for GPT-4.1', () => {
+      const maxTokens = getMaxAllowedTokens({ ...mockModel, id: 'gpt-4.1' })
+      expect(maxTokens).toBe(910051)
+    })
+
+    test('uses default values for unknown model', () => {
+      const unknownModel: Model = {
+        ...mockModel,
+        id: 'unknown-model'
+      }
+      const maxTokens = getMaxAllowedTokens(unknownModel)
+      // Expected: (16384 - 4096) - (16384 * 0.1) = 12288 - 1638.4 = 10649.6 -> 10650
+      expect(maxTokens).toBe(10650)
+    })
+
+    test('ensures minimum viable token count', () => {
+      // This would need a model with very small context window to test
+      // For now, verify the function returns at least 1000
+      const maxTokens = getMaxAllowedTokens(mockModel)
+      expect(maxTokens).toBeGreaterThanOrEqual(1000)
+    })
+
+    test('uses the real ~1M window for production Gemini models', () => {
+      // (1048576 - 65536) - floor(1048576 * 0.1) = 983040 - 104857 = 878183
+      for (const id of ['gemini-3-flash-preview', 'gemini-3.1-flash-lite']) {
+        const maxTokens = getMaxAllowedTokens({
+          ...mockModel,
+          id,
+          providerId: 'google'
+        })
+        expect(maxTokens).toBe(878183)
+      }
+    })
+
+    test('uses the real 1.05M window for GPT-6 Luna', () => {
+      // (1050000 - 128000) - floor(1050000 * 0.1) = 817000
+      const maxTokens = getMaxAllowedTokens({
+        ...mockModel,
+        id: 'gpt-6-luna'
+      })
+      expect(maxTokens).toBe(817000)
+    })
+
+    test('resolves a model absent from the old hand-maintained table', () => {
+      const maxTokens = getMaxAllowedTokens({
+        ...mockModel,
+        id: 'claude-sonnet-4-6',
+        providerId: 'anthropic'
+      })
+      expect(maxTokens).toBe(772000)
+    })
+
+    test('reserves output tokens when input metadata exceeds the remainder', () => {
+      // min(272000, 400000 - 200000) - floor(400000 * 0.1) = 200000 - 40000
+      const maxTokens = getMaxAllowedTokens({
+        ...mockModel,
+        id: 'gpt-5-pro'
+      })
+      expect(maxTokens).toBe(160000)
+    })
+
+    test('caps the output reservation for models whose output equals context', () => {
+      // (256000 - 128000) - floor(256000 * 0.1) = 128000 - 25600
+      const maxTokens = getMaxAllowedTokens({
+        ...mockModel,
+        id: 'mistral/mistral-large-3',
+        providerId: 'gateway'
+      })
+      expect(maxTokens).toBe(102400)
+    })
+
+    test('falls back to Vercel metadata for a direct provider miss', () => {
+      const maxTokens = getMaxAllowedTokens({
+        ...mockModel,
+        id: 'claude-sonnet-4',
+        providerId: 'anthropic'
+      })
+      expect(maxTokens).toBe(891808)
+    })
+
+    test('does not resolve object prototype keys as models', () => {
+      const maxTokens = getMaxAllowedTokens({
+        ...mockModel,
+        id: 'constructor',
+        providerId: 'openai'
+      })
+      expect(maxTokens).toBe(10650)
+    })
+
+    test('resolves gateway model ids from Vercel metadata', () => {
+      const maxTokens = getMaxAllowedTokens({
+        ...mockModel,
+        id: 'openai/gpt-5.6-luna',
+        providerId: 'gateway'
+      })
+      expect(maxTokens).toBe(817000)
+    })
+
+    test('searches the snapshot for providers without a direct mapping', () => {
+      const maxTokens = getMaxAllowedTokens({
+        ...mockModel,
+        id: 'gpt-4.1',
+        providerId: 'openai-compatible'
+      })
+      expect(maxTokens).toBe(910051)
+    })
+  })
+
+  describe('shouldTruncateMessages', () => {
+    test('returns false for empty messages', () => {
+      expect(shouldTruncateMessages([], mockModel)).toBe(false)
+    })
+
+    test('returns false when under limit', () => {
+      const messages: ModelMessage[] = [
+        createMessage('user', 'Hello'),
+        createMessage('assistant', 'Hi there!')
+      ]
+      expect(shouldTruncateMessages(messages, mockModel)).toBe(false)
+    })
+
+    test('returns true when over limit', () => {
+      // Create messages that exceed the token limit
+      // mockModel (gpt-4o-mini) has 98816 max tokens
+      const longText = 'This is a test message. '.repeat(1000) // ~6000 tokens per message
+      const messages: ModelMessage[] = Array(20)
+        .fill(null)
+        .map(() => createMessage('user', longText)) // Total: ~120,000 tokens > 98,816 max tokens
+      expect(shouldTruncateMessages(messages, mockModel)).toBe(true)
+    })
+
+    test('counts file parts toward the context window', () => {
+      const unknownModel: Model = { ...mockModel, id: 'unknown-model' }
+      const messages: ModelMessage[] = [
+        {
+          role: 'user',
+          content: [
+            {
+              type: 'file',
+              mediaType: 'application/pdf',
+              data: 'https://example.com/report.pdf'
+            },
+            {
+              type: 'file',
+              mediaType: 'application/pdf',
+              data: 'https://example.com/appendix.pdf'
+            }
+          ]
+        }
+      ]
+
+      expect(shouldTruncateMessages(messages, unknownModel)).toBe(true)
+    })
+
+    test('does not treat a URL-backed PDF as an unknown-size attachment', () => {
+      const unknownModel: Model = { ...mockModel, id: 'unknown-model' }
+      const url = 'https://example.com/report.pdf'
+      const messages: ModelMessage[] = [
+        {
+          role: 'user',
+          content: [
+            {
+              type: 'file',
+              mediaType: 'application/pdf',
+              data: { type: 'url', url: new URL(url) }
+            }
+          ]
+        }
+      ]
+
+      expect(
+        shouldTruncateMessages(messages, unknownModel, new Map([[url, 10_000]]))
+      ).toBe(false)
+    })
+
+    test('uses a resolved large-PDF estimate in the context guard', () => {
+      const url = 'https://example.com/large-report.pdf'
+      const messages: ModelMessage[] = [
+        {
+          role: 'user',
+          content: [
+            {
+              type: 'file',
+              mediaType: 'application/pdf',
+              data: { type: 'url', url: new URL(url) }
+            }
+          ]
+        }
+      ]
+
+      expect(
+        shouldTruncateMessages(messages, mockModel, new Map([[url, 400_000]]))
+      ).toBe(true)
+    })
+
+    test('handles null/undefined messages gracefully', () => {
+      expect(shouldTruncateMessages(null as any, mockModel)).toBe(false)
+      expect(shouldTruncateMessages(undefined as any, mockModel)).toBe(false)
+    })
+  })
+
+  describe('truncateMessages', () => {
+    test('returns empty array for empty messages', () => {
+      expect(truncateMessages([], 1000)).toEqual([])
+    })
+
+    test('returns empty array for invalid maxTokens', () => {
+      const messages = [createMessage('user', 'Hello')]
+      expect(truncateMessages(messages, 0)).toEqual([])
+      expect(truncateMessages(messages, -100)).toEqual([])
+    })
+
+    test('returns all messages when under limit', () => {
+      const messages: ModelMessage[] = [
+        createMessage('user', 'Hello'),
+        createMessage('assistant', 'Hi!'),
+        createMessage('user', 'How are you?'),
+        createMessage('assistant', 'I am fine!')
+      ]
+      const result = truncateMessages(messages, 10000)
+      expect(result).toEqual(messages)
+    })
+
+    test('preserves first user message when possible', () => {
+      const messages: ModelMessage[] = [
+        createMessage('user', 'First important context'),
+        createMessage('assistant', 'Response 1'),
+        createMessage('user', 'Question 2'),
+        createMessage('assistant', 'Response 2'),
+        createMessage('user', 'Question 3'),
+        createMessage('assistant', 'Response 3')
+      ]
+
+      const result = truncateMessages(messages, 100) // Very low limit
+      expect(result.length).toBeGreaterThan(0)
+      expect(result[0]).toEqual(messages[0]) // First user message preserved
+    })
+
+    test('never drops the latest user message to fit an earlier one', () => {
+      const messages: ModelMessage[] = [
+        createMessage('user', 'Question 1'),
+        createMessage('assistant', 'Long response '.repeat(50)),
+        createMessage('user', 'Source context '.repeat(50)),
+        createMessage('user', 'Latest question')
+      ]
+
+      const result = truncateMessages(messages, 50)
+      expect(result[result.length - 1].content).toBe('Latest question')
+    })
+
+    test('removes assistant messages to keep user messages', () => {
+      const messages: ModelMessage[] = [
+        createMessage('user', 'Question 1'),
+        createMessage('assistant', 'Very long response '.repeat(50)),
+        createMessage('user', 'Question 2'),
+        createMessage('assistant', 'Another long response '.repeat(50)),
+        createMessage('user', 'Important last question')
+      ]
+
+      const result = truncateMessages(messages, 200)
+      const userMessages = result.filter(m => m.role === 'user')
+      expect(userMessages.length).toBeGreaterThan(0)
+      expect(userMessages[userMessages.length - 1].content).toBe(
+        'Important last question'
+      )
+    })
+
+    test('removes leading assistant messages when truncating', () => {
+      // Create messages that will force truncation
+      const longText = 'a'.repeat(1000) // ~250 tokens each
+      const messages: ModelMessage[] = [
+        createMessage('assistant', longText),
+        createMessage('assistant', longText),
+        createMessage('user', 'Hello'),
+        createMessage('assistant', 'Hi'),
+        createMessage('user', 'Last message')
+      ]
+
+      // Force truncation with low limit
+      const result = truncateMessages(messages, 100)
+
+      // After truncation, should prefer user messages
+      expect(result.length).toBeGreaterThan(0)
+
+      // The implementation removes leading non-user messages after truncation
+      const hasUserMessage = result.some(m => m.role === 'user')
+      expect(hasUserMessage).toBe(true)
+    })
+
+    test('handles messages with complex content types', () => {
+      const messages: ModelMessage[] = [
+        {
+          role: 'user',
+          content: [
+            { type: 'text', text: 'Hello' },
+            { type: 'text', text: 'World' }
+          ]
+        },
+        {
+          role: 'assistant',
+          content: 'Response'
+        }
+      ]
+
+      const result = truncateMessages(messages, 1000)
+      expect(result.length).toBeGreaterThan(0)
+    })
+
+    test('uses resolved attachment estimates while truncating', () => {
+      const url = 'https://example.com/large-report.pdf'
+      const messages: ModelMessage[] = [
+        {
+          role: 'user',
+          content: [
+            {
+              type: 'file',
+              mediaType: 'application/pdf',
+              data: { type: 'url', url: new URL(url) }
+            }
+          ]
+        }
+      ]
+
+      expect(
+        truncateMessages(
+          messages,
+          100_000,
+          mockModel.id,
+          new Map([[url, 400_000]])
+        )
+      ).toEqual([])
+    })
+
+    test('handles undefined content gracefully', () => {
+      const messages: ModelMessage[] = [
+        { role: 'user', content: '' },
+        { role: 'assistant', content: 'Response' }
+      ]
+
+      const result = truncateMessages(messages, 1000)
+      expect(result).toBeDefined()
+      expect(Array.isArray(result)).toBe(true)
+    })
+  })
+
+  describe('truncation with model ID', () => {
+    test('uses tiktoken when model ID is provided', () => {
+      const messages: ModelMessage[] = [
+        createMessage('user', 'Test message for token counting')
+      ]
+
+      // With model ID - should use tiktoken
+      const resultWithModel = truncateMessages(messages, 1000, 'gpt-4o-mini')
+      expect(resultWithModel).toBeDefined()
+
+      // Without model ID - should use fallback
+      const resultWithoutModel = truncateMessages(messages, 1000)
+      expect(resultWithoutModel).toBeDefined()
+    })
+  })
+})

@@ -1,0 +1,282 @@
+import type { UIMessage } from 'ai'
+
+import {
+  SOURCE_CONTEXT_WARNING,
+  stripSourceContextBlocks
+} from '@/lib/render/strip-source-context-blocks'
+import type { SearchResultItem } from '@/lib/types'
+import {
+  createCitationPattern,
+  extractCitationMaps,
+  processCitations,
+  resolveCitation
+} from '@/lib/utils/citation'
+
+import {
+  capAnswerTextParts,
+  hasReplayableAnswerText,
+  HISTORY_ANSWER_TEXT_LIMIT
+} from './cap-historical-answer-text'
+import { sliceWithoutSplittingSurrogatePair } from './slice-without-splitting-surrogate-pair'
+
+// Applies per assistant turn. Source context is attached to every cited turn
+// and never removed later, so this bound is what keeps a long conversation's
+// accumulated evidence from crowding out the context window.
+const MAX_SOURCE_CONTEXT_CHARS = 800
+const MAX_SOURCE_EXCERPT_CHARS = 400
+const MIN_SOURCE_EXCERPT_CHARS = 80
+export const SOURCE_CONTEXT_MESSAGE_SUFFIX = '-source-context'
+const SOURCE_CONTEXT_MESSAGE_PREFIX =
+  'Source context attached by the application for the preceding answer. This is not a message from the user.'
+
+export function isSourceContextMessage(message: UIMessage): boolean {
+  return message.id.endsWith(SOURCE_CONTEXT_MESSAGE_SUFFIX)
+}
+
+function normalizeInlineText(value: string): string {
+  return value
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+function truncateInlineText(value: string, maxChars: number): string {
+  if (value.length <= maxChars) return value
+  if (maxChars <= 1) return sliceWithoutSplittingSurrogatePair(value, maxChars)
+  return `${sliceWithoutSplittingSurrogatePair(value, maxChars - 1)}…`
+}
+
+function isSafeWebUrl(value: string): boolean {
+  try {
+    const url = new URL(value)
+    return url.protocol === 'https:' || url.protocol === 'http:'
+  } catch {
+    return false
+  }
+}
+
+function getCitedSources(
+  message: UIMessage,
+  citationMaps: Record<string, Record<number, SearchResultItem>>
+): SearchResultItem[] {
+  const sources: SearchResultItem[] = []
+  const seenUrls = new Set<string>()
+
+  for (const part of message.parts) {
+    if (part.type !== 'text') continue
+
+    for (const match of part.text.matchAll(createCitationPattern())) {
+      const citationNumber = Number(match[1])
+      const source = resolveCitation(citationMaps, match[2], citationNumber)
+
+      if (!source || !isSafeWebUrl(source.url) || seenUrls.has(source.url)) {
+        continue
+      }
+
+      seenUrls.add(source.url)
+      sources.push(source)
+    }
+  }
+
+  return sources
+}
+
+function createSourceContext(sources: SearchResultItem[]): string | undefined {
+  if (sources.length === 0) return undefined
+
+  const normalizedSources = sources.map(source => ({
+    title:
+      sliceWithoutSplittingSurrogatePair(
+        normalizeInlineText(source.title),
+        200
+      ) || 'Untitled source',
+    url: source.url,
+    // Older Brave results used `description`; keep the fallback for persisted
+    // conversations while all new providers normalize excerpts to `content`.
+    excerpt: normalizeInlineText(
+      source.content ??
+        (source as SearchResultItem & { description?: string }).description ??
+        ''
+    )
+  }))
+
+  const render = (excerptChars: number) => {
+    const entries = normalizedSources.map((source, index) => {
+      const excerpt = sliceWithoutSplittingSurrogatePair(
+        source.excerpt,
+        excerptChars
+      )
+
+      return [
+        `${index + 1}. ${source.title}`,
+        `URL: ${source.url}`,
+        ...(excerpt ? [`Excerpt: ${excerpt}`] : [])
+      ].join('\n')
+    })
+
+    return `<source_context>
+${SOURCE_CONTEXT_WARNING}
+
+${entries.join('\n\n')}
+</source_context>`
+  }
+
+  const renderCompact = () => {
+    const header = `<source_context>
+${SOURCE_CONTEXT_WARNING}
+Entries correspond to cited sources in order. Their URLs remain in the preceding answer.
+
+`
+    const footer = '\n</source_context>'
+    const separatorsLength = Math.max(0, normalizedSources.length - 1)
+    const entriesBudget =
+      MAX_SOURCE_CONTEXT_CHARS -
+      header.length -
+      footer.length -
+      separatorsLength
+    const entryBudget = Math.floor(entriesBudget / normalizedSources.length)
+
+    // This cannot occur with the search providers' result limits, but keep the
+    // hard bound even if malformed stored history contains thousands of cites.
+    if (entryBudget < 4) {
+      return `${header}Cited-source details omitted because their index exceeds the context budget.${footer}`
+    }
+
+    const entries = normalizedSources.map((source, index) => {
+      const prefix = `${index + 1}. `
+      const detail = source.excerpt
+        ? `${source.excerpt} — ${source.title}`
+        : source.title
+
+      return `${prefix}${truncateInlineText(
+        detail,
+        Math.max(0, entryBudget - prefix.length)
+      )}`
+    })
+
+    return `${header}${entries.join('\n')}${footer}`
+  }
+
+  const contextWithoutExcerpts = render(0)
+  if (contextWithoutExcerpts.length > MAX_SOURCE_CONTEXT_CHARS) {
+    return renderCompact()
+  }
+
+  const sourcesWithExcerpts = normalizedSources.filter(
+    source => source.excerpt.length > 0
+  ).length
+  if (sourcesWithExcerpts === 0) return contextWithoutExcerpts
+
+  const excerptLabelChars = '\nExcerpt: '.length * sourcesWithExcerpts
+  const excerptBudget = Math.max(
+    0,
+    MAX_SOURCE_CONTEXT_CHARS - contextWithoutExcerpts.length - excerptLabelChars
+  )
+  const excerptCharsPerSource = Math.min(
+    MAX_SOURCE_EXCERPT_CHARS,
+    Math.floor(excerptBudget / sourcesWithExcerpts)
+  )
+
+  // Excerpts this short carry no evidence. processCitations already expanded
+  // every cited URL into the answer above, so spend the budget on excerpts
+  // rather than repeating the URLs here.
+  if (excerptCharsPerSource < MIN_SOURCE_EXCERPT_CHARS) {
+    return renderCompact()
+  }
+
+  const context = render(excerptCharsPerSource)
+  return context.length <= MAX_SOURCE_CONTEXT_CHARS ? context : renderCompact()
+}
+
+/**
+ * Converts completed assistant history into a provider-neutral transcript.
+ *
+ * Historical reasoning, tool calls, tool results, step markers, and provider
+ * metadata are execution details. Replaying only part of those details can
+ * violate provider-specific ordering requirements, while replaying all of
+ * them wastes context. Cited sources are retained as a separate, bounded,
+ * untrusted user-role message immediately after the answer. The current
+ * request's ToolLoopAgent messages do not pass through this function, so its
+ * active reasoning/tool sequence remains intact.
+ *
+ * Each historical message's replayed output depends only on that message.
+ * Appending turns can only append to the replayed prompt, preserving its
+ * stable prefix.
+ */
+export function compactHistoricalMessages(
+  messages: UIMessage[],
+  answerTextCap: { maxChars?: number } = {}
+): UIMessage[] {
+  const maxChars = answerTextCap.maxChars ?? HISTORY_ANSWER_TEXT_LIMIT
+  const currentTurnIndex = messages.findLastIndex(
+    message => message.role === 'user'
+  )
+  const historyEnd =
+    currentTurnIndex === -1 ? messages.length : currentTurnIndex
+
+  return messages.flatMap((message, index) => {
+    if (message.role !== 'assistant') {
+      return [message]
+    }
+
+    const sanitizedParts: UIMessage['parts'] = []
+    for (const part of message.parts) {
+      if (part.type !== 'text') {
+        sanitizedParts.push(part)
+        continue
+      }
+
+      const text = stripSourceContextBlocks(part.text)
+      if (text.trim()) sanitizedParts.push({ ...part, text })
+    }
+    const sanitizedMessage: UIMessage = {
+      ...message,
+      parts: sanitizedParts
+    }
+
+    if (!hasReplayableAnswerText(sanitizedMessage)) {
+      return []
+    }
+
+    const citationMaps = extractCitationMaps(sanitizedMessage)
+    let textParts = sanitizedMessage.parts.flatMap(part => {
+      if (part.type !== 'text' || !part.text.trim()) {
+        return []
+      }
+
+      // Recreate the part instead of spreading it so stale provider metadata
+      // and other execution-only fields cannot be replayed.
+      return [
+        {
+          type: 'text' as const,
+          text: processCitations(part.text, citationMaps)
+        }
+      ]
+    })
+
+    if (maxChars > 0 && index < historyEnd) {
+      textParts = capAnswerTextParts(textParts, maxChars)
+    }
+
+    const sourceContext = createSourceContext(
+      getCitedSources(sanitizedMessage, citationMaps)
+    )
+    const replayedMessage = { ...message, parts: textParts }
+    if (!sourceContext) return [replayedMessage]
+
+    return [
+      replayedMessage,
+      {
+        id: `${message.id}${SOURCE_CONTEXT_MESSAGE_SUFFIX}`,
+        role: 'user' as const,
+        parts: [
+          {
+            type: 'text' as const,
+            text: `${SOURCE_CONTEXT_MESSAGE_PREFIX}\n\n${sourceContext}`
+          }
+        ]
+      }
+    ]
+  })
+}

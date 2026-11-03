@@ -1,0 +1,72 @@
+{
+  "note": "Thresholds gate CI. A null value means the metric is measured and reported but not enforced. minSamples is the smallest denominator the threshold may be enforced on, so a low-trial run reports without failing. Run the eval to get a baseline, then commit the numbers here so any later change to them shows up in a diff.",
+  "related-questions": {
+    "completionRate": {
+      "direction": "min",
+      "value": 0.9
+    },
+    "emissionRate": {
+      "direction": "min",
+      "value": 0.85,
+      "minSamples": 50
+    },
+    "falsePositiveRate": {
+      "direction": "max",
+      "value": 0.2,
+      "minSamples": 50
+    },
+    "wellFormedRate": {
+      "direction": "min",
+      "value": 0.9,
+      "minSamples": 50
+    }
+  },
+  "source-cards": {
+    "completionRate": {
+      "direction": "min",
+      "value": 0.9
+    },
+    "emissionRate": {
+      "direction": "min",
+      "value": null
+    },
+    "misuseRate": {
+      "direction": "max",
+      "value": null
+    },
+    "wellFormedRate": {
+      "direction": "min",
+      "value": null
+    },
+    "groundedRate": {
+      "direction": "min",
+      "value": null
+    },
+    "misattributedRate": {
+      "direction": "max",
+      "value": null
+    },
+    "roundupMisuseRate": {
+      "direction": "max",
+      "value": null
+    }
+  },
+  "draft-edits": {
+    "completionRate": {
+      "direction": "min",
+      "value": 0.9
+    },
+    "hijackRate": {
+      "direction": "max",
+      "value": null
+    },
+    "newBlockRate": {
+      "direction": "min",
+      "value": null
+    },
+    "editSuccessRate": {
+      "direction": "min",
+      "value": null
+    }
+  }
+}

@@ -1,0 +1,159 @@
+'use client'
+import { useState } from 'react'
+import Link from 'next/link'
+import { useRouter } from 'next/navigation'
+
+import { signUp } from '@/lib/actions/auth'
+import { useAuthCapabilities } from '@/lib/contexts/app-user-context'
+import { cn } from '@/lib/utils/index'
+
+import { Button } from '@/components/ui/button'
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle
+} from '@/components/ui/card'
+import { IconLogo } from '@/components/ui/icons'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { PasswordInput } from '@/components/ui/password-input'
+
+export function SignUpForm({
+  className,
+  token,
+  inviteEmail,
+  ...props
+}: React.ComponentPropsWithoutRef<'div'> & {
+  token?: string
+  inviteEmail?: string
+}) {
+  const [email, setEmail] = useState(inviteEmail ?? '')
+  const [password, setPassword] = useState('')
+  const [repeatPassword, setRepeatPassword] = useState('')
+  const [error, setError] = useState<string | null>(null)
+  const [notice, setNotice] = useState<string | null>(null)
+  const [isLoading, setIsLoading] = useState(false)
+  const router = useRouter()
+  const capabilities = useAuthCapabilities()
+
+  const handleSignUp = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setIsLoading(true)
+    setError(null)
+    setNotice(null)
+
+    if (password !== repeatPassword) {
+      setError('Passwords do not match')
+      setIsLoading(false)
+      return
+    }
+
+    try {
+      const result = await signUp({ email, password, token })
+      if (!result.success) throw new Error(result.error ?? 'An error occurred')
+      if (result.notice) {
+        // Sign-up continues out-of-band (e.g. an emailed bootstrap link);
+        // show the message instead of redirecting.
+        setNotice(result.notice)
+        return
+      }
+      if (capabilities.emailVerification) {
+        router.push('/auth/sign-up-success')
+      } else {
+        // Providers without email verification sign the user in immediately;
+        // send them straight to the app instead of a confirmation notice.
+        router.push('/')
+        router.refresh()
+      }
+    } catch (error: unknown) {
+      setError(error instanceof Error ? error.message : 'An error occurred')
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  return (
+    <div
+      className={cn('flex flex-col items-center gap-6', className)}
+      {...props}
+    >
+      <Card className="w-full max-w-sm">
+        <CardHeader className="text-center">
+          <CardTitle className="text-2xl flex flex-col items-center justify-center gap-4">
+            <IconLogo className="size-12" />
+            Create an account
+          </CardTitle>
+          <CardDescription>
+            Enter your details below to get started
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={handleSignUp}>
+            <div className="flex flex-col gap-4">
+              <div className="grid gap-2">
+                <Label htmlFor="email">Email</Label>
+                <Input
+                  id="email"
+                  type="email"
+                  placeholder="you@example.com"
+                  required
+                  value={email}
+                  onChange={e => setEmail(e.target.value)}
+                />
+                {inviteEmail && (
+                  <p className="text-xs text-muted-foreground">
+                    This invitation is bound to {inviteEmail}.
+                  </p>
+                )}
+              </div>
+              <div className="grid gap-2">
+                <div className="flex items-center">
+                  <Label htmlFor="password">Password</Label>
+                </div>
+                <PasswordInput
+                  id="password"
+                  type="password"
+                  placeholder="********"
+                  required
+                  value={password}
+                  onChange={e => setPassword(e.target.value)}
+                />
+              </div>
+              <div className="grid gap-2">
+                <div className="flex items-center">
+                  <Label htmlFor="repeat-password">Repeat Password</Label>
+                </div>
+                <PasswordInput
+                  id="repeat-password"
+                  type="password"
+                  placeholder="********"
+                  required
+                  value={repeatPassword}
+                  onChange={e => setRepeatPassword(e.target.value)}
+                />
+              </div>
+              {error && <p className="text-sm text-red-500">{error}</p>}
+              {notice && <p className="text-sm text-green-600">{notice}</p>}
+              <Button type="submit" className="w-full" disabled={isLoading}>
+                {isLoading ? 'Creating account...' : 'Sign Up'}
+              </Button>
+            </div>
+            <div className="mt-6 text-center text-sm">
+              Already have an account?{' '}
+              <Link href="/auth/login" className="underline underline-offset-4">
+                Sign In
+              </Link>
+            </div>
+          </form>
+        </CardContent>
+      </Card>
+      <div className="text-center text-xs text-muted-foreground">
+        <Link href="/" className="hover:underline">
+          &larr; Back to Home
+        </Link>
+      </div>
+    </div>
+  )
+}

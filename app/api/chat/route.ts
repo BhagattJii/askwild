@@ -1,0 +1,533 @@
+import { cookies } from 'next/headers'
+import { after } from 'next/server'
+
+import {
+  calculateConversationTurn,
+  calculateConversationTurnFromIds,
+  deriveQueryShape,
+  trackChatEvent
+} from '@/lib/analytics'
+import { getCurrentUser, getCurrentUserId } from '@/lib/auth/get-current-user'
+import { isAnonymousMode } from '@/lib/auth/provider'
+import { getUserMessageIds } from '@/lib/db/actions'
+import { generateId } from '@/lib/db/schema'
+import { checkAndEnforceAdaptiveLimit } from '@/lib/rate-limit/adaptive-limit'
+import { checkAndEnforceOverallChatLimit } from '@/lib/rate-limit/chat-limits'
+import { checkAndEnforceGuestLimit } from '@/lib/rate-limit/guest-limit'
+import {
+  ADAPTIVE_MODE_AUTH_REQUIRED_MESSAGE,
+  isAdaptiveModeAuthBlocked
+} from '@/lib/search-mode-availability'
+import { createChatStreamResponse } from '@/lib/streaming/create-chat-stream-response'
+import { createEphemeralChatStreamResponse } from '@/lib/streaming/create-ephemeral-chat-stream-response'
+import { SearchMode } from '@/lib/types/search'
+import {
+  consumeUsage,
+  createUsageRefundHandler,
+  ENFORCEMENT,
+  isUsageBudgetAvailable,
+  isValidUsageAttemptId,
+  recordUsageEvent,
+  refundUsage,
+  trackUsageConsumed,
+  trackUsageLimitReached,
+  usageLimitResponse
+} from '@/lib/usage-budget'
+import {
+  exceedsAttachmentLimit,
+  MAX_ATTACHMENTS_PER_MESSAGE
+} from '@/lib/utils/attachment-limits'
+import { getTextFromParts } from '@/lib/utils/message-utils'
+import { selectModel } from '@/lib/utils/model-selection'
+import { perfLog, perfTime } from '@/lib/utils/perf-logging'
+import { resetAllCounters } from '@/lib/utils/perf-tracking'
+import { isProviderEnabled } from '@/lib/utils/registry'
+
+export const maxDuration = 300
+
+type UsageSettlementSlot = {
+  spend?: { amount: number; remaining: number }
+  refund?: { amount: number; remaining: number }
+  limitReached?: {
+    amount: number
+    remaining: number
+    reason: 'monthly' | 'hourly'
+  }
+}
+
+export async function POST(req: Request) {
+  const startTime = performance.now()
+  const abortSignal = req.signal
+  let refundUsageOnce: (() => Promise<void>) | undefined
+
+  // Reset counters for new request (development only)
+  if (process.env.ENABLE_PERF_LOGGING === 'true') {
+    resetAllCounters()
+  }
+
+  try {
+    const body = await req.json()
+    const { message, messages, chatId, trigger, messageId, isNewChat } = body
+    const analyticsId: unknown = body.analyticsId
+    const usageAttemptId: unknown = body.usageAttemptId
+
+    // Normalize the message id up front so persistence and analytics agree on it.
+    if (message && !message.id) {
+      message.id = generateId()
+    }
+
+    perfLog(
+      `API Route - Start: chatId=${chatId}, trigger=${trigger}, isNewChat=${isNewChat}`
+    )
+
+    // Handle different triggers using AI SDK standard values
+    if (trigger === 'regenerate-message') {
+      if (!messageId) {
+        return new Response('messageId is required for regeneration', {
+          status: 400,
+          statusText: 'Bad Request'
+        })
+      }
+    } else if (trigger === 'submit-message') {
+      if (!message) {
+        return new Response('message is required for submission', {
+          status: 400,
+          statusText: 'Bad Request'
+        })
+      }
+    }
+
+    const referer = req.headers.get('referer')
+    const isSharePage = referer?.includes('/share/')
+
+    const authStart = performance.now()
+    const anonymous = isAnonymousMode()
+    const currentUser = anonymous ? null : await getCurrentUser()
+    const userId =
+      currentUser?.id ?? (anonymous ? await getCurrentUserId() : undefined)
+    perfTime('Auth completed', authStart)
+
+    if (isSharePage) {
+      return new Response('Chat API is not available on share pages', {
+        status: 403,
+        statusText: 'Forbidden'
+      })
+    }
+
+    const guestChatEnabled = process.env.ENABLE_GUEST_CHAT === 'true'
+    const isGuest = !userId
+
+    if (exceedsAttachmentLimit({ isGuest, trigger, message, messages })) {
+      return new Response(
+        JSON.stringify({
+          error: `You can attach up to ${MAX_ATTACHMENTS_PER_MESSAGE} files per message.`,
+          type: 'general',
+          code: 'bad_request',
+          retryable: false
+        }),
+        {
+          status: 400,
+          headers: { 'Content-Type': 'application/json' }
+        }
+      )
+    }
+
+    const keylessFilePartCount = Array.isArray(message?.parts)
+      ? message.parts.filter(
+          (part: unknown) =>
+            typeof part === 'object' &&
+            part !== null &&
+            (part as { type?: unknown }).type === 'file' &&
+            !(part as { key?: unknown }).key
+        ).length
+      : 0
+
+    if (isGuest && !guestChatEnabled) {
+      return new Response('Authentication required', {
+        status: 401,
+        statusText: 'Unauthorized'
+      })
+    }
+
+    if (isGuest) {
+      const forwardedFor = req.headers.get('x-forwarded-for') || ''
+      const ip =
+        forwardedFor.split(',')[0]?.trim() ||
+        req.headers.get('x-real-ip') ||
+        null
+      const guestLimitResponse = await checkAndEnforceGuestLimit(ip)
+      if (guestLimitResponse) return guestLimitResponse
+    }
+
+    const usageBudgetAvailable = !isGuest && isUsageBudgetAvailable()
+    if (
+      usageBudgetAvailable &&
+      ENFORCEMENT === 'on' &&
+      !isValidUsageAttemptId(usageAttemptId)
+    ) {
+      return new Response(
+        JSON.stringify({
+          error: 'A valid usage attempt ID is required.',
+          type: 'general',
+          code: 'bad_request',
+          retryable: false
+        }),
+        {
+          status: 400,
+          headers: { 'Content-Type': 'application/json' }
+        }
+      )
+    }
+
+    const cookieStore = await cookies()
+
+    // Get search mode from cookie
+    const searchModeCookie = cookieStore.get('searchMode')?.value
+    const searchMode: SearchMode =
+      searchModeCookie && ['quick', 'adaptive'].includes(searchModeCookie)
+        ? (searchModeCookie as SearchMode)
+        : 'quick'
+
+    // Adaptive mode is gated to authenticated users on cloud deployments.
+    // Check before model/provider selection so guests always get the
+    // intentional auth payload instead of lower-level configuration errors.
+    if (
+      isAdaptiveModeAuthBlocked({
+        mode: searchMode,
+        isGuest,
+        isCloudDeployment: process.env.HAWKIN_CLOUD_DEPLOYMENT === 'true'
+      })
+    ) {
+      return new Response(
+        JSON.stringify({
+          error: ADAPTIVE_MODE_AUTH_REQUIRED_MESSAGE,
+          mode: 'adaptive',
+          authRequired: true
+        }),
+        {
+          status: 401,
+          headers: { 'Content-Type': 'application/json' }
+        }
+      )
+    }
+
+    const selectedModel = await selectModel({ searchMode, cookieStore })
+
+    if (!selectedModel) {
+      return new Response('No enabled model is available', {
+        status: 503,
+        statusText: 'Service Unavailable'
+      })
+    }
+
+    if (!isProviderEnabled(selectedModel.providerId)) {
+      return new Response(
+        `Selected provider is not enabled ${selectedModel.providerId}`,
+        {
+          status: 404,
+          statusText: 'Not Found'
+        }
+      )
+    }
+
+    if (!isGuest) {
+      const overallLimitResponse = await checkAndEnforceOverallChatLimit(userId)
+      if (overallLimitResponse) return overallLimitResponse
+
+      if (searchMode === 'adaptive') {
+        const adaptiveLimitResponse = await checkAndEnforceAdaptiveLimit(userId)
+        if (adaptiveLimitResponse) return adaptiveLimitResponse
+      }
+
+      if (usageBudgetAvailable && isValidUsageAttemptId(usageAttemptId)) {
+        const usageNow = new Date()
+        const usage = await consumeUsage({
+          userId,
+          mode: searchMode,
+          attemptId: usageAttemptId,
+          messageId: message?.id ?? messageId,
+          userCreatedAt: currentUser?.createdAt,
+          now: usageNow
+        })
+
+        if (usage.duplicate) {
+          if (!usage.allowed && ENFORCEMENT === 'on') {
+            return usageLimitResponse(usage)
+          }
+
+          return new Response(
+            JSON.stringify({
+              error: 'This usage attempt was already processed.',
+              type: 'general',
+              code: 'duplicate_attempt',
+              retryable: false
+            }),
+            {
+              status: 409,
+              headers: { 'Content-Type': 'application/json' }
+            }
+          )
+        }
+
+        const charged =
+          usage.enforced && (usage.allowed || ENFORCEMENT === 'shadow')
+        const settlement: UsageSettlementSlot = {}
+
+        if (charged) {
+          settlement.spend = {
+            amount: usage.cost,
+            remaining: usage.remaining
+          }
+        }
+        if (!usage.allowed && usage.reason) {
+          settlement.limitReached = {
+            amount: usage.cost,
+            remaining: usage.remaining,
+            reason: usage.reason
+          }
+        }
+
+        refundUsageOnce = createUsageRefundHandler({
+          charged,
+          refund: () =>
+            refundUsage({
+              userId,
+              attemptId: usageAttemptId,
+              now: usageNow
+            }),
+          onRefunded: refund => {
+            settlement.refund = {
+              amount: refund.amount,
+              remaining: refund.remaining
+            }
+          },
+          onError: error => {
+            console.error('Failed to refund usage attempt:', error)
+          }
+        })
+
+        if (usage.enforced) {
+          after(async () => {
+            const work: Promise<void>[] = []
+
+            if (settlement.spend) {
+              work.push(
+                recordUsageEvent({
+                  userId,
+                  eventType: 'spend',
+                  amount: settlement.spend.amount,
+                  mode: searchMode,
+                  attemptId: usageAttemptId,
+                  messageId: message?.id ?? messageId,
+                  remaining: settlement.spend.remaining
+                }),
+                trackUsageConsumed({
+                  userId,
+                  mode: searchMode,
+                  remaining: settlement.spend.remaining,
+                  enforcement: ENFORCEMENT
+                })
+              )
+            }
+
+            if (settlement.limitReached) {
+              work.push(
+                recordUsageEvent({
+                  userId,
+                  eventType: 'limit_reached',
+                  amount: settlement.limitReached.amount,
+                  mode: searchMode,
+                  attemptId: usageAttemptId,
+                  messageId: message?.id ?? messageId,
+                  remaining: settlement.limitReached.remaining
+                }),
+                trackUsageLimitReached({
+                  userId,
+                  mode: searchMode,
+                  reason: settlement.limitReached.reason,
+                  enforcement: ENFORCEMENT
+                })
+              )
+            }
+
+            if (settlement.refund) {
+              work.push(
+                recordUsageEvent({
+                  userId,
+                  eventType: 'refund',
+                  amount: settlement.refund.amount,
+                  mode: searchMode,
+                  attemptId: usageAttemptId,
+                  messageId: message?.id ?? messageId,
+                  remaining: settlement.refund.remaining
+                })
+              )
+            }
+
+            await Promise.allSettled(work)
+          })
+        }
+
+        if (!usage.allowed && ENFORCEMENT === 'on') {
+          return usageLimitResponse(usage)
+        }
+      }
+    }
+
+    if (keylessFilePartCount > 0) {
+      console.warn(
+        'Keyless file parts received',
+        JSON.stringify({
+          chatId,
+          messageId: message?.id ?? messageId ?? null,
+          trigger,
+          keylessFilePartCount,
+          clientSource:
+            typeof body.clientSource === 'string' ? body.clientSource : null,
+          userAgent: req.headers.get('user-agent'),
+          referer,
+          origin: req.headers.get('origin'),
+          secFetchSite: req.headers.get('sec-fetch-site'),
+          vercelId: req.headers.get('x-vercel-id')
+        })
+      )
+    }
+
+    const streamStart = performance.now()
+    perfLog(
+      `createChatStreamResponse - Start: model=${selectedModel.providerId}:${selectedModel.id}, searchMode=${searchMode}`
+    )
+
+    let response: Response
+    if (isGuest) {
+      if (!Array.isArray(messages) || messages.length === 0) {
+        return new Response('messages are required', {
+          status: 400,
+          statusText: 'Bad Request'
+        })
+      }
+
+      if (
+        !messages.every(
+          (message: unknown) =>
+            typeof message === 'object' &&
+            message !== null &&
+            !Array.isArray(message) &&
+            'role' in message &&
+            typeof message.role === 'string' &&
+            'parts' in message &&
+            Array.isArray(message.parts) &&
+            message.parts.every(
+              (part: unknown) =>
+                typeof part === 'object' &&
+                part !== null &&
+                !Array.isArray(part) &&
+                'type' in part &&
+                typeof part.type === 'string'
+            )
+        )
+      ) {
+        return new Response('Invalid message structure', {
+          status: 400,
+          statusText: 'Bad Request'
+        })
+      }
+
+      response = await createEphemeralChatStreamResponse({
+        messages,
+        model: selectedModel,
+        abortSignal,
+        searchMode,
+        chatId
+      })
+    } else {
+      try {
+        response = await createChatStreamResponse({
+          message,
+          model: selectedModel,
+          chatId,
+          userId: userId, // userId is guaranteed to be non-null after authentication check above
+          trigger,
+          messageId,
+          abortSignal,
+          isNewChat,
+          searchMode,
+          onZeroPartError: refundUsageOnce
+        })
+      } catch (error) {
+        await refundUsageOnce?.()
+        throw error
+      }
+
+      if (!response.ok) await refundUsageOnce?.()
+    }
+
+    perfTime('createChatStreamResponse resolved', streamStart)
+
+    // Track analytics event (non-blocking)
+    // Calculate conversation turn
+    ;(async () => {
+      try {
+        // Attribute to the authenticated user id, or the client-provided
+        // PostHog distinct id for guests (so it merges with their client events).
+        const distinctId =
+          userId ?? (typeof analyticsId === 'string' ? analyticsId : undefined)
+        if (!distinctId) return
+
+        let conversationTurn = 1 // Default for new chats
+        if (!isNewChat) {
+          if (!isGuest && userId) {
+            const userMessageIds = await getUserMessageIds(chatId, userId)
+            conversationTurn = calculateConversationTurnFromIds(
+              userMessageIds,
+              message?.id
+            )
+          } else if (isGuest && Array.isArray(messages)) {
+            conversationTurn = calculateConversationTurn(messages, message?.id)
+          }
+        }
+
+        const resolvedTrigger =
+          (trigger as 'submit-message' | 'regenerate-message') ??
+          'submit-message'
+        const queryShape =
+          resolvedTrigger === 'submit-message' && message?.parts
+            ? deriveQueryShape(getTextFromParts(message.parts))
+            : undefined
+
+        await trackChatEvent({
+          searchMode,
+          conversationTurn,
+          isNewChat: isNewChat ?? false,
+          trigger: resolvedTrigger,
+          chatId,
+          distinctId,
+          isGuest,
+          userId: userId ?? undefined,
+          providerId: selectedModel.providerId,
+          modelId: selectedModel.id,
+          queryShape
+        })
+      } catch (error) {
+        // Log error but don't throw - analytics should never break the app
+        console.error('Analytics tracking failed:', error)
+      }
+    })()
+
+    const totalTime = performance.now() - startTime
+    perfLog(`Total API route time: ${totalTime.toFixed(2)}ms`)
+    perfLog(`=== Summary ===`)
+    perfLog(`Chat Type: ${isNewChat ? 'NEW' : 'EXISTING'}`)
+    perfLog(`Total Time: ${totalTime.toFixed(2)}ms`)
+    perfLog(`================`)
+
+    return response
+  } catch (error) {
+    await refundUsageOnce?.()
+    console.error('API route error:', error)
+    return new Response('Error processing your request', {
+      status: 500,
+      statusText: 'Internal Server Error'
+    })
+  }
+}
