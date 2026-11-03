@@ -124,7 +124,12 @@ export function SearchModeSelector({
               />
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" className="w-64" sideOffset={5}>
+          <DropdownMenuContent
+            align="start"
+            side="top"
+            className="w-64"
+            sideOffset={5}
+          >
             {SEARCH_MODE_CONFIGS.map(config => {
               const ModeIcon = config.icon
               const isSelected = value === config.value
@@ -210,6 +215,7 @@ export function SearchModeSelector({
                   <HoverCardContent
                     className="w-72"
                     align="center"
+                    side="top"
                     sideOffset={8}
                   >
                     <div className="space-y-2">

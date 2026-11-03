@@ -91,7 +91,13 @@ export function createResearcher({
   try {
     // Date only: a second-precision timestamp sits at the head of the prompt
     // prefix and changes on every request, which alone voids the prompt cache.
-    const currentDate = new Date().toLocaleDateString()
+    const currentDate = new Date().toLocaleDateString('en-IN', {
+      weekday: 'long',
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric',
+      timeZone: 'Asia/Kolkata'
+    })
 
     // Create model-specific tools with proper typing
     const labelAllocator = createCitationLabelAllocator(citationLabelSeed)
@@ -155,7 +161,7 @@ export function createResearcher({
     // Create ToolLoopAgent with all configuration
     const agent = new ToolLoopAgent({
       model: getModel(model),
-      instructions: `${systemPrompt}\nCurrent date: ${currentDate}`,
+      instructions: `${systemPrompt}\nCurrent date: ${currentDate} (IST). When the user asks about today, recent events, news, dates, prices, or anything time-sensitive, answer from fresh search results (mention result dates when available) instead of training-dataset knowledge.`,
       tools,
       activeTools: activeToolsList,
       stopWhen: isStepCount(maxSteps),

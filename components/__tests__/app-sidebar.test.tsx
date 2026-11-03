@@ -70,13 +70,13 @@ describe('AppSidebar version footer', () => {
     vi.unstubAllEnvs()
   })
 
-  test('shows the version footer by default', () => {
+  test('never renders the version footer', () => {
     renderSidebar()
 
-    expect(screen.getByText('Version footer')).toBeInTheDocument()
+    expect(screen.queryByText('Version footer')).not.toBeInTheDocument()
   })
 
-  test('hides the version footer on the cloud deployment', () => {
+  test('renders it in neither cloud nor self-host mode', () => {
     vi.stubEnv('HAWKIN_CLOUD_DEPLOYMENT', 'true')
     renderSidebar()
 

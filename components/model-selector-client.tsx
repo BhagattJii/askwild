@@ -137,7 +137,12 @@ export function ModelSelectorClient({ data }: ModelSelectorClientProps) {
           />
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-[300px] p-0" align="end" sideOffset={6}>
+      <PopoverContent
+        className="w-[300px] p-0"
+        align="end"
+        side="top"
+        sideOffset={6}
+      >
         <Command>
           <CommandInput placeholder="Search models..." />
           <CommandList>
