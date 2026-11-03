@@ -42,3 +42,7 @@ _local/
 
 # claude code local state (settings, launch config, worktrees)
 .claude/
+
+# local env files (keep the template tracked)
+.env*
+!.env.local.example
