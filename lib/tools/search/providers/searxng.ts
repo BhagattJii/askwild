@@ -23,7 +23,7 @@ export class SearXNGSearchProvider extends BaseSearchProvider {
       const url = new URL(`${apiUrl}/search`)
       url.searchParams.append('q', query)
       url.searchParams.append('format', 'json')
-      url.searchParams.append('categories', 'general,images')
+      url.searchParams.append('categories', process.env.SEARXNG_CATEGORIES || 'general')
 
       const engines =
         process.env.SEARXNG_ENGINES || 'google,bing,duckduckgo,wikipedia'

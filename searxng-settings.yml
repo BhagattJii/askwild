@@ -33,3 +33,5 @@ server:
 search:
   formats:
     - json
+  default_engines:
+    - yandex
