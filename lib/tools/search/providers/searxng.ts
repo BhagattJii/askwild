@@ -25,15 +25,18 @@ export class SearXNGSearchProvider extends BaseSearchProvider {
       url.searchParams.append('format', 'json')
       url.searchParams.append('categories', 'general,images')
 
+      const engines =
+        process.env.SEARXNG_ENGINES || 'google,bing,duckduckgo,wikipedia'
+      const timeRange = process.env.SEARXNG_TIME_RANGE || 'None'
+      const safeSearch =
+        process.env.SEARXNG_SAFESEARCH ?? (searchDepth === 'advanced' ? '0' : '1')
+
+      url.searchParams.append('safesearch', safeSearch)
+      url.searchParams.append('engines', engines)
+
       // Apply search depth settings
-      if (searchDepth === 'advanced') {
-        url.searchParams.append('time_range', '')
-        url.searchParams.append('safesearch', '0')
-        url.searchParams.append('engines', 'google,bing,duckduckgo,wikipedia')
-      } else {
-        url.searchParams.append('time_range', 'year')
-        url.searchParams.append('safesearch', '1')
-        url.searchParams.append('engines', 'google,bing')
+      if (timeRange !== 'None') {
+        url.searchParams.append('time_range', timeRange)
       }
 
       // Apply domain filters if provided
