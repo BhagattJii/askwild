@@ -36,11 +36,16 @@ const createDatabase = (url: string) => {
 
   // SSL configuration: Use environment variable to control SSL
   // DATABASE_SSL_DISABLED=true disables SSL completely (for local/Docker PostgreSQL)
-  // Default is to enable SSL with certificate verification (for cloud databases like Neon, Supabase)
+  // Default is to enable SSL without certificate verification (for cloud databases
+  // like Supabase/Neon whose chain is not always publicly verifiable).
+  // Set DATABASE_SSL_REJECT_UNAUTHORIZED=true to enforce strict verification.
   const sslConfig =
     process.env.DATABASE_SSL_DISABLED === 'true'
       ? false // Disable SSL entirely for local PostgreSQL
-      : { rejectUnauthorized: true } // Enable SSL with verification for cloud DBs
+      : {
+          rejectUnauthorized:
+            process.env.DATABASE_SSL_REJECT_UNAUTHORIZED === 'true'
+        } // Enable SSL for cloud DBs
 
   const client = postgres(url, {
     ssl: sslConfig,
