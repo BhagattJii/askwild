@@ -21,7 +21,7 @@ FROM node:22-slim AS runner
 WORKDIR /app
 
 # Install method shown in the sidebar version footer
-ENV HAWKIN_INSTALL_METHOD=docker
+ENV ASKWILD_INSTALL_METHOD=docker
 
 # Install bun for dependency management (used for migrations)
 RUN npm install -g bun

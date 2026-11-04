@@ -143,7 +143,7 @@ export function ChatArtifactContainer({
         )}
       </div>
 
-      {/* Desktop: Independent panels like hawkin-studio */}
+      {/* Desktop: Independent panels like askwild-studio */}
       <div
         ref={setContainerRef}
         className="hidden md:flex flex-1 min-w-0 overflow-hidden"

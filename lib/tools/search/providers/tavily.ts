@@ -3,7 +3,7 @@ import { sanitizeUrl } from '@/lib/utils'
 
 import { BaseSearchProvider } from './base'
 
-// Domains excluded system-wide in Indra Cloud deployments. Tavily has
+// Domains excluded system-wide in Askwild Cloud deployments. Tavily has
 // started surfacing low-value aggregator/social pages (notably Instagram)
 // that rarely help answer informational queries.
 const CLOUD_EXCLUDED_DOMAINS = ['instagram.com']
@@ -102,7 +102,7 @@ export class TavilySearchProvider extends BaseSearchProvider {
       ...validSiteDomains
     ]
 
-    const isCloudDeployment = process.env.HAWKIN_CLOUD_DEPLOYMENT === 'true'
+    const isCloudDeployment = process.env.ASKWILD_CLOUD_DEPLOYMENT === 'true'
     const effectiveExcludeDomains = isCloudDeployment
       ? Array.from(new Set([...excludeDomains, ...CLOUD_EXCLUDED_DOMAINS]))
       : excludeDomains

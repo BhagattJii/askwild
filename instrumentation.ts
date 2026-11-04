@@ -15,7 +15,7 @@ let telemetryRegistered = false
 
 export async function register() {
   registerOTel({
-    serviceName: 'hawkin-ai-search',
+    serviceName: 'askwild-ai-search',
     spanProcessors: [langfuseSpanProcessor]
   })
 

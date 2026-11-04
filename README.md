@@ -1,6 +1,6 @@
 <div align="center">
 
-# Indra
+# Askwild
 
 **AI-powered search engine — private, free, no tracking.**
 
@@ -29,8 +29,8 @@ Just visit the live instance and start asking questions. No signup required.
 ### Run your own
 ```bash
 # Clone and install
-git clone https://github.com/BhagattJii/indra
-cd indra
+git clone https://github.com/BhagattJii/askwild
+cd askwild
 bun install
 
 # Configure
@@ -48,9 +48,9 @@ Environment variables (all optional):
 
 ---
 
-## Why indra?
+## Why askwild?
 
-Most search engines track you, show ads, or limit free usage. indra was built to be different: **you ask, it answers, nobody watches.**
+Most search engines track you, show ads, or limit free usage. askwild was built to be different: **you ask, it answers, nobody watches.**
 
 ---
 

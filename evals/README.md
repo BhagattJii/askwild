@@ -181,7 +181,7 @@ Anything derived from production traces (thumbs-down turns, errored turns) must
 managed dataset and fetch it at run time:
 
 ```ts
-const dataset = await langfuse.dataset.get('hawkin-thumbs-down-regression')
+const dataset = await langfuse.dataset.get('askwild-thumbs-down-regression')
 ```
 
 `experiment.run` accepts local items and Langfuse dataset items interchangeably,

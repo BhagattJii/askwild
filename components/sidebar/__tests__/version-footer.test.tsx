@@ -22,7 +22,7 @@ const mockedCheckForUpdate = vi.mocked(checkForUpdate)
 const UPDATE_RESULT = {
   hasUpdate: true,
   latestVersion: 'v1.9.0',
-  releaseUrl: 'https://github.com/miurla/hawkin/releases/tag/v1.9.0'
+  releaseUrl: 'https://github.com/miurla/askwild/releases/tag/v1.9.0'
 }
 
 function appUser(role?: string): AppUser {
@@ -40,7 +40,7 @@ async function renderFooter(user?: AppUser | null) {
 describe('VersionFooter', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    vi.stubEnv('HAWKIN_INSTALL_METHOD', 'docker')
+    vi.stubEnv('ASKWILD_INSTALL_METHOD', 'docker')
     mockedIsAnonymousMode.mockReturnValue(false)
     mockedCheckForUpdate.mockResolvedValue({ hasUpdate: false })
   })
@@ -57,7 +57,7 @@ describe('VersionFooter', () => {
     })
     expect(versionLink).toHaveAttribute(
       'href',
-      'https://github.com/miurla/hawkin/releases'
+      'https://github.com/miurla/askwild/releases'
     )
     expect(versionLink).toHaveAttribute('target', '_blank')
     expect(versionLink).toHaveAttribute('rel', 'noopener')
@@ -73,7 +73,7 @@ describe('VersionFooter', () => {
     const updateLink = screen.getByRole('link', { name: 'Update: v1.9.0' })
     expect(updateLink).toHaveAttribute(
       'href',
-      'https://github.com/miurla/hawkin/releases/tag/v1.9.0'
+      'https://github.com/miurla/askwild/releases/tag/v1.9.0'
     )
     expect(updateLink).toHaveAttribute('target', '_blank')
     expect(updateLink).toHaveAttribute('rel', 'noopener')
@@ -99,7 +99,7 @@ describe('VersionFooter', () => {
   })
 
   test('shows the update link to an allowlisted email without a role', async () => {
-    vi.stubEnv('HAWKIN_ADMIN_EMAILS', 'user@example.com')
+    vi.stubEnv('ASKWILD_ADMIN_EMAILS', 'user@example.com')
     mockedCheckForUpdate.mockResolvedValue(UPDATE_RESULT)
 
     await renderFooter(appUser())
@@ -110,7 +110,7 @@ describe('VersionFooter', () => {
   })
 
   test('matches allowlisted emails case-insensitively', async () => {
-    vi.stubEnv('HAWKIN_ADMIN_EMAILS', 'other@example.com, USER@Example.COM')
+    vi.stubEnv('ASKWILD_ADMIN_EMAILS', 'other@example.com, USER@Example.COM')
     mockedCheckForUpdate.mockResolvedValue(UPDATE_RESULT)
 
     await renderFooter(appUser())
@@ -121,7 +121,7 @@ describe('VersionFooter', () => {
   })
 
   test('hides the update link for an email outside the allowlist', async () => {
-    vi.stubEnv('HAWKIN_ADMIN_EMAILS', 'someone-else@example.com')
+    vi.stubEnv('ASKWILD_ADMIN_EMAILS', 'someone-else@example.com')
     mockedCheckForUpdate.mockResolvedValue(UPDATE_RESULT)
 
     await renderFooter(appUser())

@@ -19,7 +19,7 @@ export default async function SearchPage(props: {
 
   const id = generateUUID()
   const userId = await getCurrentUserId()
-  const isCloudDeployment = process.env.HAWKIN_CLOUD_DEPLOYMENT === 'true'
+  const isCloudDeployment = process.env.ASKWILD_CLOUD_DEPLOYMENT === 'true'
   const libraryAvailable = !isAnonymousMode()
   const modelSelectorData = await getModelSelectorData()
 

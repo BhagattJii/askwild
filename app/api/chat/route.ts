@@ -195,7 +195,7 @@ export async function POST(req: Request) {
       isAdaptiveModeAuthBlocked({
         mode: searchMode,
         isGuest,
-        isCloudDeployment: process.env.HAWKIN_CLOUD_DEPLOYMENT === 'true'
+        isCloudDeployment: process.env.ASKWILD_CLOUD_DEPLOYMENT === 'true'
       })
     ) {
       return new Response(

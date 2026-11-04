@@ -1,5 +1,5 @@
 /**
- * Parses `HAWKIN_ADMIN_EMAILS`: a comma-separated allowlist of email
+ * Parses `ASKWILD_ADMIN_EMAILS`: a comma-separated allowlist of email
  * addresses that count as admins for the version footer's update link.
  * Intended for auth providers without a role concept (e.g. Supabase), where
  * no user ever carries an `admin` role. Matching is case-insensitive;
@@ -8,7 +8,7 @@
 export function parseAdminEmails(
   env: Record<string, string | undefined>
 ): Set<string> {
-  const raw = env.HAWKIN_ADMIN_EMAILS ?? ''
+  const raw = env.ASKWILD_ADMIN_EMAILS ?? ''
   return new Set(
     raw
       .split(',')

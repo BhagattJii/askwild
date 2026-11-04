@@ -18,7 +18,7 @@ describe('checkAndEnforceGuestLimit', () => {
   beforeEach(() => {
     mockRedisIncr.mockReset()
     mockRedisExpire.mockReset()
-    process.env.HAWKIN_CLOUD_DEPLOYMENT = 'true'
+    process.env.ASKWILD_CLOUD_DEPLOYMENT = 'true'
     process.env.UPSTASH_REDIS_REST_URL = 'https://example.com'
     process.env.UPSTASH_REDIS_REST_TOKEN = 'token'
     delete process.env.GUEST_CHAT_DAILY_LIMIT

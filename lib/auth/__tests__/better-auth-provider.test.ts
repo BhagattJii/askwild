@@ -200,7 +200,7 @@ describe('better-auth provider', () => {
 
     it('hides the OAuth button until BETTER_AUTH_URL provides the callback origin', () => {
       process.env.OIDC_ISSUER = 'https://idp.example.com'
-      process.env.OIDC_CLIENT_ID = 'hawkin-client'
+      process.env.OIDC_CLIENT_ID = 'askwild-client'
       process.env.OIDC_CLIENT_SECRET = 'secret'
 
       // The IdP redirect URI and the post-sign-in redirect derive from the

@@ -34,9 +34,9 @@ const fontSans = FontSans({
   variable: '--font-sans'
 })
 
-const title = 'Indra'
+const title = 'Askwild'
 const description =
-  'Indra — fast, private, AI-powered search built for India. Answers with live sources, citations and images.'
+  'Askwild — fast, private, AI-powered search built for India. Answers with live sources, citations and images.'
 
 export const metadata: Metadata = {
   metadataBase: new URL('https://hawkin-two.vercel.app'),
@@ -77,7 +77,7 @@ export default async function RootLayout({
   )
 
   const userId = user?.id ?? (await getCurrentUserId())
-  const isCloudDeployment = process.env.HAWKIN_CLOUD_DEPLOYMENT === 'true'
+  const isCloudDeployment = process.env.ASKWILD_CLOUD_DEPLOYMENT === 'true'
   const usageBudgetEnabled = Boolean(
     user &&
       isCloudDeployment &&

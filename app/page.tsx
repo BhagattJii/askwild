@@ -6,7 +6,7 @@ import { Chat } from '@/components/chat'
 
 export default async function Page() {
   const userId = await getCurrentUserId()
-  const isCloudDeployment = process.env.HAWKIN_CLOUD_DEPLOYMENT === 'true'
+  const isCloudDeployment = process.env.ASKWILD_CLOUD_DEPLOYMENT === 'true'
   const libraryAvailable = !isAnonymousMode()
   const modelSelectorData = await getModelSelectorData()
 

@@ -12,13 +12,13 @@ describe('none auth provider (anonymous mode)', () => {
     for (const key of [
       'ENABLE_AUTH',
       'ANONYMOUS_USER_ID',
-      'HAWKIN_CLOUD_DEPLOYMENT',
+      'ASKWILD_CLOUD_DEPLOYMENT',
       'NODE_ENV'
     ]) {
       original[key] = process.env[key]
     }
     delete process.env.ANONYMOUS_USER_ID
-    delete process.env.HAWKIN_CLOUD_DEPLOYMENT
+    delete process.env.ASKWILD_CLOUD_DEPLOYMENT
   })
 
   afterEach(() => {
@@ -69,11 +69,11 @@ describe('none auth provider (anonymous mode)', () => {
     vi.unstubAllEnvs()
   })
 
-  it('refuses to resolve the anonymous identity in Indra Cloud deployments', async () => {
-    process.env.HAWKIN_CLOUD_DEPLOYMENT = 'true'
+  it('refuses to resolve the anonymous identity in Askwild Cloud deployments', async () => {
+    process.env.ASKWILD_CLOUD_DEPLOYMENT = 'true'
 
     await expect(noneAuthProvider.getCurrentUserId?.()).rejects.toThrow(
-      'ENABLE_AUTH=false is not allowed in HAWKIN_CLOUD_DEPLOYMENT'
+      'ENABLE_AUTH=false is not allowed in ASKWILD_CLOUD_DEPLOYMENT'
     )
   })
 

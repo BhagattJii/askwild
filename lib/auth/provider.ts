@@ -24,17 +24,17 @@ function enforceCloudDeploymentGuard(
   name: AuthProviderName,
   explicitlyConfigured: boolean
 ): void {
-  if (process.env.HAWKIN_CLOUD_DEPLOYMENT !== 'true' || name === 'supabase') {
+  if (process.env.ASKWILD_CLOUD_DEPLOYMENT !== 'true' || name === 'supabase') {
     return
   }
   if (name === 'none' && !explicitlyConfigured) {
     // Preserve the historical message for ENABLE_AUTH=false deployments
     throw new Error(
-      'ENABLE_AUTH=false is not allowed in HAWKIN_CLOUD_DEPLOYMENT'
+      'ENABLE_AUTH=false is not allowed in ASKWILD_CLOUD_DEPLOYMENT'
     )
   }
   throw new Error(
-    `AUTH_PROVIDER=${name} is not allowed in HAWKIN_CLOUD_DEPLOYMENT`
+    `AUTH_PROVIDER=${name} is not allowed in ASKWILD_CLOUD_DEPLOYMENT`
   )
 }
 
@@ -119,7 +119,7 @@ export function getAuthProvider(): AuthProvider {
   const provider = providerRegistry[name]
   if (!provider) {
     throw new Error(
-      `AUTH_PROVIDER=${name} is not available in this version of Indra.`
+      `AUTH_PROVIDER=${name} is not available in this version of Askwild.`
     )
   }
   return provider

@@ -21,7 +21,7 @@ function imageResponse(
 }
 
 function request(query: string): Request {
-  return new Request(`https://hawkin.test/api/favicon?${query}`)
+  return new Request(`https://askwild.test/api/favicon?${query}`)
 }
 
 async function get(query: string): Promise<Response> {

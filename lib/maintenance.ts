@@ -33,7 +33,7 @@ const MAINTENANCE_HTML = `<!doctype html>
 <body>
 <main>
   <h1>We'll be back shortly</h1>
-  <p>Indra is undergoing scheduled maintenance. Your chats are safe. Please check back in a few minutes.</p>
+  <p>Askwild is undergoing scheduled maintenance. Your chats are safe. Please check back in a few minutes.</p>
 </main>
 </body>
 </html>`

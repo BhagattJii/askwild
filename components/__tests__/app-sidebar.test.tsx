@@ -77,7 +77,7 @@ describe('AppSidebar version footer', () => {
   })
 
   test('renders it in neither cloud nor self-host mode', () => {
-    vi.stubEnv('HAWKIN_CLOUD_DEPLOYMENT', 'true')
+    vi.stubEnv('ASKWILD_CLOUD_DEPLOYMENT', 'true')
     renderSidebar()
 
     expect(screen.queryByText('Version footer')).not.toBeInTheDocument()

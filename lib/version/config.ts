@@ -7,7 +7,7 @@ export interface VersionCheckConfig {
   disabled: boolean
 }
 
-const DEFAULT_REPO = 'miurla/hawkin'
+const DEFAULT_REPO = 'miurla/askwild'
 const DEFAULT_TTL_SECONDS = 86400
 const MIN_TTL_SECONDS = 300
 const REPO_PATTERN = /^[\w.-]+\/[\w.-]+$/
@@ -20,17 +20,17 @@ const REPO_PATTERN = /^[\w.-]+\/[\w.-]+$/
 export function parseVersionCheckConfig(
   env: Record<string, string | undefined>
 ): VersionCheckConfig {
-  let repo = env.HAWKIN_UPDATE_CHECK_REPO?.trim() || DEFAULT_REPO
+  let repo = env.ASKWILD_UPDATE_CHECK_REPO?.trim() || DEFAULT_REPO
   if (!REPO_PATTERN.test(repo)) {
     console.warn(
-      `[version] ignoring invalid HAWKIN_UPDATE_CHECK_REPO "${repo}" ` +
+      `[version] ignoring invalid ASKWILD_UPDATE_CHECK_REPO "${repo}" ` +
         `(expected "owner/repo"); using ${DEFAULT_REPO}`
     )
     repo = DEFAULT_REPO
   }
 
   let ttlSeconds = DEFAULT_TTL_SECONDS
-  const rawTtl = env.HAWKIN_UPDATE_CHECK_TTL_SECONDS?.trim()
+  const rawTtl = env.ASKWILD_UPDATE_CHECK_TTL_SECONDS?.trim()
   if (rawTtl !== undefined && rawTtl !== '') {
     const parsed = Number(rawTtl)
     if (Number.isFinite(parsed)) {
@@ -38,7 +38,7 @@ export function parseVersionCheckConfig(
     }
   }
 
-  const disabled = env.HAWKIN_UPDATE_CHECK_DISABLED === 'true'
+  const disabled = env.ASKWILD_UPDATE_CHECK_DISABLED === 'true'
 
   return { repo, ttlSeconds, disabled }
 }

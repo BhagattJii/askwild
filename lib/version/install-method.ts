@@ -1,13 +1,13 @@
 /**
  * Resolves the install-method label shown in the sidebar footer.
- * Precedence: explicit `HAWKIN_INSTALL_METHOD` (used verbatim, so operators
+ * Precedence: explicit `ASKWILD_INSTALL_METHOD` (used verbatim, so operators
  * can set any value such as `docker` or `unraid`), then Vercel detection via
  * the platform-provided `VERCEL` env var, then `source`.
  */
 export function resolveInstallMethod(
   env: Record<string, string | undefined>
 ): string {
-  const explicit = env.HAWKIN_INSTALL_METHOD
+  const explicit = env.ASKWILD_INSTALL_METHOD
   if (explicit !== undefined && explicit.trim() !== '') {
     return explicit
   }

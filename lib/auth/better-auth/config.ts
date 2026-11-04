@@ -83,7 +83,7 @@ function getSecret(): string {
         'secret. Set BETTER_AUTH_SECRET to a stable random value.'
     )
   }
-  return 'hawkin-better-auth-development-secret'
+  return 'askwild-better-auth-development-secret'
 }
 
 /**
@@ -410,7 +410,7 @@ function createAuth() {
   // deliver it to the browser without a hand-written header copy.
 
   return betterAuth({
-    appName: 'Indra',
+    appName: 'Askwild',
     secret: getSecret(),
     database: drizzleAdapter(db, { provider: 'pg', schema: authSchema }),
     // Only the canonical deployment origin may initiate auth flows; other
@@ -431,7 +431,7 @@ function createAuth() {
       minPasswordLength: 10,
       // better-auth 1.7 removed the built-in nodemailer transport: without
       // this callback, requestPasswordReset fails with RESET_PASSWORD_DISABLED
-      // even when the SMTP variables are present. Indra does not use email
+      // even when the SMTP variables are present. Askwild does not use email
       // verification, so this is the only email better-auth delivers;
       // invitation mail goes through lib/actions/admin.ts.
       sendResetPassword: smtpConfigured
@@ -454,7 +454,7 @@ function createAuth() {
             const link = `${origin}/auth/update-password?token=${token}`
             await sendSmtpMail({
               to: user.email,
-              subject: 'Reset your Indra password',
+              subject: 'Reset your Askwild password',
               text: `Use this link to reset your password (valid for one hour): ${link}`,
               html: `<p>Use this link to reset your password (valid for one hour):</p><p><a href="${link}">Reset password</a></p>`
             })

@@ -1,10 +1,10 @@
 /**
  * Fixed-window in-process rate limiter for the auth actions that call
  * `auth.api.*` directly. Better Auth's own rate limiter runs only in
- * its HTTP handler, which Indra does not mount, so without this the
+ * its HTTP handler, which Askwild does not mount, so without this the
  * sign-in, sign-up, and password-reset actions would be unthrottled.
  * Callers choose the keys (see attemptAllowed in the better-auth
- * provider). Indra runs as a single instance (see
+ * provider). Askwild runs as a single instance (see
  * bootstrapSendLocks in the better-auth provider), so an in-process
  * map is sufficient; a multi-instance deployment would need a shared
  * store.

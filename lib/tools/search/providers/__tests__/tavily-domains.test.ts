@@ -45,7 +45,7 @@ describe('TavilySearchProvider domains', () => {
   })
 
   it('filters exclude_domains including the cloud-injected domain', async () => {
-    vi.stubEnv('HAWKIN_CLOUD_DEPLOYMENT', 'true')
+    vi.stubEnv('ASKWILD_CLOUD_DEPLOYMENT', 'true')
 
     const body = await searchAndReadBody(
       ['example.org'],

@@ -19,7 +19,7 @@ export function InviteRequired() {
             Invitation required
           </CardTitle>
           <CardDescription>
-            Sign-up on this Indra instance is invite-only. Ask an
+            Sign-up on this Askwild instance is invite-only. Ask an
             administrator for an invitation link and open it to create your
             account.
           </CardDescription>

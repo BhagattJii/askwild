@@ -55,9 +55,9 @@ async function sendInvitationEmail(params: {
 }): Promise<void> {
   await sendSmtpMail({
     to: params.to,
-    subject: 'You are invited to Indra',
-    text: `${params.invitedByName} invited you to Indra. Accept the invitation: ${params.inviteLink}`,
-    html: `<p>${escapeHtml(params.invitedByName)} invited you to Indra.</p><p><a href="${escapeHtml(params.inviteLink)}">Accept the invitation</a></p>`
+    subject: 'You are invited to Askwild',
+    text: `${params.invitedByName} invited you to Askwild. Accept the invitation: ${params.inviteLink}`,
+    html: `<p>${escapeHtml(params.invitedByName)} invited you to Askwild.</p><p><a href="${escapeHtml(params.inviteLink)}">Accept the invitation</a></p>`
   })
 }
 

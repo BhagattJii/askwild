@@ -10,7 +10,7 @@ import {
 const AUTH_ENV_KEYS = [
   'AUTH_PROVIDER',
   'ENABLE_AUTH',
-  'HAWKIN_CLOUD_DEPLOYMENT',
+  'ASKWILD_CLOUD_DEPLOYMENT',
   'NEXT_PUBLIC_SUPABASE_URL',
   'NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY'
 ] as const
@@ -134,9 +134,9 @@ describe('auth provider dispatch', () => {
     })
   })
 
-  describe('Indra Cloud deployment guard', () => {
+  describe('Askwild Cloud deployment guard', () => {
     beforeEach(() => {
-      process.env.HAWKIN_CLOUD_DEPLOYMENT = 'true'
+      process.env.ASKWILD_CLOUD_DEPLOYMENT = 'true'
     })
 
     it('allows supabase', () => {
@@ -147,21 +147,21 @@ describe('auth provider dispatch', () => {
     it('refuses derived none (ENABLE_AUTH=false) with the historical error', () => {
       process.env.ENABLE_AUTH = 'false'
       expect(() => resolveAuthProviderName()).toThrow(
-        'ENABLE_AUTH=false is not allowed in HAWKIN_CLOUD_DEPLOYMENT'
+        'ENABLE_AUTH=false is not allowed in ASKWILD_CLOUD_DEPLOYMENT'
       )
     })
 
     it('refuses explicit AUTH_PROVIDER=none', () => {
       process.env.AUTH_PROVIDER = 'none'
       expect(() => resolveAuthProviderName()).toThrow(
-        'AUTH_PROVIDER=none is not allowed in HAWKIN_CLOUD_DEPLOYMENT'
+        'AUTH_PROVIDER=none is not allowed in ASKWILD_CLOUD_DEPLOYMENT'
       )
     })
 
     it('refuses AUTH_PROVIDER=better-auth', () => {
       process.env.AUTH_PROVIDER = 'better-auth'
       expect(() => resolveAuthProviderName()).toThrow(
-        'AUTH_PROVIDER=better-auth is not allowed in HAWKIN_CLOUD_DEPLOYMENT'
+        'AUTH_PROVIDER=better-auth is not allowed in ASKWILD_CLOUD_DEPLOYMENT'
       )
     })
   })

@@ -22,7 +22,7 @@ describe('checkForUpdate', () => {
     vi.clearAllMocks()
     resetFailureBackoff()
     mockedGetConfig.mockReturnValue({
-      repo: 'miurla/hawkin',
+      repo: 'miurla/askwild',
       ttlSeconds: 86400,
       disabled: false
     })
@@ -42,10 +42,10 @@ describe('checkForUpdate', () => {
     expect(result).toEqual({
       hasUpdate: true,
       latestVersion: 'v1.8.0',
-      releaseUrl: 'https://github.com/miurla/hawkin/releases/tag/v1.8.0'
+      releaseUrl: 'https://github.com/miurla/askwild/releases/tag/v1.8.0'
     })
     expect(fetchMock).toHaveBeenCalledWith(
-      'https://api.github.com/repos/miurla/hawkin/releases/latest',
+      'https://api.github.com/repos/miurla/askwild/releases/latest',
       expect.objectContaining({
         next: { revalidate: 86400 },
         headers: { accept: 'application/vnd.github+json' },
@@ -128,7 +128,7 @@ describe('checkForUpdate', () => {
 
   test('makes no upstream request when the check is disabled', async () => {
     mockedGetConfig.mockReturnValue({
-      repo: 'miurla/hawkin',
+      repo: 'miurla/askwild',
       ttlSeconds: 86400,
       disabled: true
     })
@@ -164,7 +164,7 @@ describe('checkForUpdate', () => {
     expect(r1).toEqual({
       hasUpdate: true,
       latestVersion: 'v1.8.0',
-      releaseUrl: 'https://github.com/miurla/hawkin/releases/tag/v1.8.0'
+      releaseUrl: 'https://github.com/miurla/askwild/releases/tag/v1.8.0'
     })
     expect(r2).toEqual(r1)
 
@@ -221,7 +221,7 @@ describe('checkForUpdate', () => {
     expect(await behind).toEqual({
       hasUpdate: true,
       latestVersion: 'v1.8.0',
-      releaseUrl: 'https://github.com/miurla/hawkin/releases/tag/v1.8.0'
+      releaseUrl: 'https://github.com/miurla/askwild/releases/tag/v1.8.0'
     })
     expect(fetchMock).toHaveBeenCalledTimes(1)
 

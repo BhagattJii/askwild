@@ -80,7 +80,7 @@ describe('POST /api/chat guest message validation', () => {
     vi.resetAllMocks()
     vi.stubEnv('ENABLE_AUTH', 'true')
     vi.stubEnv('ENABLE_GUEST_CHAT', 'true')
-    vi.stubEnv('HAWKIN_CLOUD_DEPLOYMENT', 'false')
+    vi.stubEnv('ASKWILD_CLOUD_DEPLOYMENT', 'false')
     vi.stubEnv('ENABLE_PERF_LOGGING', 'false')
     vi.mocked(getCurrentUser).mockResolvedValue(null)
     vi.mocked(selectModel).mockResolvedValue(model)

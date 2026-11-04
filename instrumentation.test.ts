@@ -45,7 +45,7 @@ describe('instrumentation', () => {
     await register()
 
     expect(registerOTel).toHaveBeenCalledWith({
-      serviceName: 'hawkin-ai-search',
+      serviceName: 'askwild-ai-search',
       spanProcessors: [langfuseSpanProcessor]
     })
   })

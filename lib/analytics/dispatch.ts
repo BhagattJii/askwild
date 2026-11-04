@@ -5,7 +5,7 @@ import {
 } from './providers/posthog-server'
 
 export function isAnalyticsEnabled(): boolean {
-  return process.env.HAWKIN_CLOUD_DEPLOYMENT === 'true'
+  return process.env.ASKWILD_CLOUD_DEPLOYMENT === 'true'
 }
 
 export async function capture(event: ServerEvent): Promise<void> {

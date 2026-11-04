@@ -3,7 +3,7 @@
   "configVersion": 0,
   "workspaces": {
     "": {
-      "name": "hawkin",
+      "name": "askwild",
       "dependencies": {
         "@ai-sdk/anthropic": "^4.0.87",
         "@ai-sdk/gateway": "^4.0.125",

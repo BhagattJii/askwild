@@ -14,7 +14,7 @@ import packageJson from '../../package.json'
  * The viewer counts as an admin when the resolved auth provider is the
  * anonymous one (single-operator mode, which sets no role), when the provider
  * resolved an `admin` role onto the user (e.g. Better Auth), or when the
- * user's email is on the `HAWKIN_ADMIN_EMAILS` allowlist (for providers
+ * user's email is on the `ASKWILD_ADMIN_EMAILS` allowlist (for providers
  * without a role concept, e.g. Supabase). The user is the one the root layout
  * already resolved, so the footer performs no auth lookup of its own.
  */

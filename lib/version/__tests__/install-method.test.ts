@@ -6,12 +6,12 @@ describe('resolveInstallMethod', () => {
   test.each([
     {
       name: 'explicit override is used verbatim',
-      env: { HAWKIN_INSTALL_METHOD: 'unraid' },
+      env: { ASKWILD_INSTALL_METHOD: 'unraid' },
       expected: 'unraid'
     },
     {
       name: 'explicit override wins over Vercel detection',
-      env: { HAWKIN_INSTALL_METHOD: 'docker', VERCEL: '1' },
+      env: { ASKWILD_INSTALL_METHOD: 'docker', VERCEL: '1' },
       expected: 'docker'
     },
     {
@@ -21,7 +21,7 @@ describe('resolveInstallMethod', () => {
     },
     {
       name: 'empty override falls through to Vercel detection',
-      env: { HAWKIN_INSTALL_METHOD: '', VERCEL: '1' },
+      env: { ASKWILD_INSTALL_METHOD: '', VERCEL: '1' },
       expected: 'vercel'
     },
     {

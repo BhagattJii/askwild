@@ -24,7 +24,7 @@ export function setupTracing(): Tracing {
 
   const processor = new LangfuseSpanProcessor()
   registerOTel({
-    serviceName: 'hawkin-evals',
+    serviceName: 'askwild-evals',
     spanProcessors: [processor],
     // The default fetch instrumentation corrupts non-streaming provider
     // responses outside Next.js ("Invalid JSON response" on most multi-step

@@ -46,7 +46,7 @@ async function checkAdaptiveLimit(
 ): Promise<AdaptiveLimitCheckResult> {
   const limit = getAdaptiveDailyLimit()
 
-  if (process.env.HAWKIN_CLOUD_DEPLOYMENT !== 'true') {
+  if (process.env.ASKWILD_CLOUD_DEPLOYMENT !== 'true') {
     return {
       allowed: true,
       used: 0,

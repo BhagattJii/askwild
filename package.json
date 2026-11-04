@@ -1,5 +1,5 @@
 {
-  "name": "indra",
+  "name": "askwild",
   "version": "0.1.0",
   "private": true,
   "license": "Apache-2.0",
@@ -130,5 +130,5 @@
     "@ai-sdk/otel": "^1.0.152"
   },
   "description": "AI-powered search engine — free & privacy-first",
-  "author": "Indra"
+  "author": "Askwild"
 }

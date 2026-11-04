@@ -44,7 +44,7 @@ export default async function AdminPage() {
       <div>
         <h1 className="text-2xl font-semibold">Instance administration</h1>
         <p className="text-sm text-muted-foreground">
-          Manage invitations and member accounts for this Indra instance.
+          Manage invitations and member accounts for this Askwild instance.
         </p>
       </div>
 

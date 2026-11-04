@@ -7,7 +7,7 @@
 1. Pull the latest image:
 
 ```bash
-docker pull ghcr.io/miurla/hawkin:latest
+docker pull ghcr.io/miurla/askwild:latest
 ```
 
 2. Configure environment:
@@ -45,11 +45,11 @@ docker compose up -d --build
 - **PostgreSQL 17** - Database with automatic migrations
 - **Redis** - SearXNG search caching
 - **SearXNG** - Self-hosted search engine (no external search API key needed)
-- **Hawkin** - The application
+- **Askwild** - The application
 
 ## Model Selection
 
-In Docker mode, Hawkin dynamically detects available AI providers based on your API keys and displays a model selector in the UI. No configuration files to edit — just set your API key and pick your model.
+In Docker mode, Askwild dynamically detects available AI providers based on your API keys and displays a model selector in the UI. No configuration files to edit — just set your API key and pick your model.
 
 ## Built-in Defaults
 
@@ -59,7 +59,7 @@ Docker Compose automatically sets these for you:
 - `SEARCH_API=searxng`
 - `SEARXNG_API_URL=http://searxng:8080`
 - `LOCAL_REDIS_URL=redis://redis:6379`
-- `HAWKIN_CLOUD_DEPLOYMENT=false`
+- `ASKWILD_CLOUD_DEPLOYMENT=false`
 
 Values in `docker-compose.yaml` take precedence over `.env.local`. To override a default:
 
@@ -84,9 +84,9 @@ If these are not set, upload is disabled.
 Customize database credentials in `.env.local`:
 
 ```bash
-POSTGRES_USER=hawkin      # Default: hawkin
-POSTGRES_PASSWORD=hawkin  # Default: hawkin
-POSTGRES_DB=hawkin        # Default: hawkin
+POSTGRES_USER=askwild      # Default: askwild
+POSTGRES_PASSWORD=askwild  # Default: askwild
+POSTGRES_DB=askwild        # Default: askwild
 POSTGRES_PORT=5432         # Default: 5432
 ```
 
@@ -146,8 +146,8 @@ docker compose down
 docker compose down -v
 
 # View logs
-docker compose logs -f hawkin
+docker compose logs -f askwild
 
 # Rebuild the image
-docker compose build hawkin
+docker compose build askwild
 ```

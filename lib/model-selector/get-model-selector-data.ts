@@ -59,7 +59,7 @@ function resolveSelectedModelKey(
 }
 
 export async function getModelSelectorData(): Promise<ModelSelectorData> {
-  if (process.env.HAWKIN_CLOUD_DEPLOYMENT === 'true') {
+  if (process.env.ASKWILD_CLOUD_DEPLOYMENT === 'true') {
     return {
       enabled: false,
       modelsByProvider: {},

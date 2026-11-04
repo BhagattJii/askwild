@@ -1,6 +1,6 @@
 # Configuration Guide
 
-This guide covers the optional features and their configuration in Hawkin.
+This guide covers the optional features and their configuration in Askwild.
 
 ## Table of Contents
 
@@ -18,7 +18,7 @@ This guide covers the optional features and their configuration in Hawkin.
 
 ## Database
 
-Hawkin uses PostgreSQL for persistent application data. A database is **optional** for stateless guest chat. To run without a database, set `ENABLE_GUEST_CHAT=true` and do not configure Supabase. Setting `ENABLE_AUTH=false` creates an anonymous user ID that uses the persistent chat path and will fail without a database.
+Askwild uses PostgreSQL for persistent application data. A database is **optional** for stateless guest chat. To run without a database, set `ENABLE_GUEST_CHAT=true` and do not configure Supabase. Setting `ENABLE_AUTH=false` creates an anonymous user ID that uses the persistent chat path and will fail without a database.
 
 Without a database, chat history, permalinks (`/search/[id]`), file upload, and feedback are unavailable.
 
@@ -27,7 +27,7 @@ Without a database, chat history, permalinks (`/search/[id]`), file upload, and 
 Set the connection string in `.env.local`:
 
 ```bash
-DATABASE_URL=postgresql://user:password@localhost:5432/hawkin
+DATABASE_URL=postgresql://user:password@localhost:5432/askwild
 ```
 
 Any PostgreSQL provider works: [Neon](https://neon.tech/), [Supabase](https://supabase.com/), or a local PostgreSQL instance.
@@ -48,11 +48,11 @@ This command applies all migrations from the `drizzle/` directory. Docker runs m
 
 ### Model Selection
 
-Hawkin dynamically detects available AI providers based on your API keys and displays a model selector in the UI. Set at least one provider API key to get started.
+Askwild dynamically detects available AI providers based on your API keys and displays a model selector in the UI. Set at least one provider API key to get started.
 
 In **Local/Docker** mode, the selected model is persisted in a cookie and used for all chat interactions including related question generation.
 
-In **Cloud** mode (`HAWKIN_CLOUD_DEPLOYMENT=true`), models are fixed by `config/models/cloud.json` and the model selector is not shown.
+In **Cloud** mode (`ASKWILD_CLOUD_DEPLOYMENT=true`), models are fixed by `config/models/cloud.json` and the model selector is not shown.
 
 ### Supported Providers
 
@@ -101,7 +101,7 @@ OPENAI_COMPATIBLE_API_KEY=[YOUR_API_KEY]
 OPENAI_COMPATIBLE_API_BASE_URL=https://api.deepseek.com
 ```
 
-Hawkin sends chat requests to `/v1/chat/completions`. You can provide either a base URL with or without `/v1`; both of these resolve to the same endpoint:
+Askwild sends chat requests to `/v1/chat/completions`. You can provide either a base URL with or without `/v1`; both of these resolve to the same endpoint:
 
 ```bash
 OPENAI_COMPATIBLE_API_BASE_URL=https://api.deepseek.com
@@ -124,18 +124,18 @@ This value is only a UI display name. The internal provider id remains `openai-c
 
 **Example: OrcaRouter**
 
-[OrcaRouter](https://www.orcarouter.ai) is an OpenAI-compatible endpoint that fronts 160+ models from OpenAI, Anthropic, Google, DeepSeek, xAI and others behind one API key. To use it with Hawkin:
+[OrcaRouter](https://www.orcarouter.ai) is an OpenAI-compatible endpoint that fronts 160+ models from OpenAI, Anthropic, Google, DeepSeek, xAI and others behind one API key. To use it with Askwild:
 
 ```bash
 OPENAI_COMPATIBLE_API_KEY=sk-orca-...
 OPENAI_COMPATIBLE_API_BASE_URL=https://api.orcarouter.ai/v1
 OPENAI_COMPATIBLE_PROVIDER_NAME=OrcaRouter
-# Pin a few tool-capable models so Hawkin's research agents work out of the box.
+# Pin a few tool-capable models so Askwild's research agents work out of the box.
 # Browse the full catalog at https://www.orcarouter.ai/models
 OPENAI_COMPATIBLE_MODELS=orcarouter/openai/gpt-5.5,orcarouter/anthropic/claude-opus-4.7,orcarouter/google/gemini-3-flash-preview
 ```
 
-Hawkin's research agents rely on tool calling, so make sure any model you select supports it. Restricting `OPENAI_COMPATIBLE_MODELS` to known tool-capable models (as above) is the simplest way to keep the selector clean and avoid hitting non-tool-capable upstreams.
+Askwild's research agents rely on tool calling, so make sure any model you select supports it. Restricting `OPENAI_COMPATIBLE_MODELS` to known tool-capable models (as above) is the simplest way to keep the selector clean and avoid hitting non-tool-capable upstreams.
 
 ## Search Providers
 
@@ -192,7 +192,7 @@ If not configured, `type="general"` searches fall back to your configured search
 
 ## Authentication
 
-Hawkin has three auth providers. Pick the one that matches how the instance is used:
+Askwild has three auth providers. Pick the one that matches how the instance is used:
 
 | Use case                           | Provider                                  |
 | ---------------------------------- | ----------------------------------------- |
@@ -207,7 +207,7 @@ Set `AUTH_PROVIDER` explicitly to one of:
 | Value         | Description                                                     |
 | ------------- | --------------------------------------------------------------- |
 | `none`        | Anonymous mode: all users share one user ID                     |
-| `better-auth` | Built-in accounts stored in Hawkin's own Postgres (multi-user) |
+| `better-auth` | Built-in accounts stored in Askwild's own Postgres (multi-user) |
 | `supabase`    | Supabase cloud authentication (multi-user)                      |
 
 When `AUTH_PROVIDER` is **unset**, the provider is derived from the existing
@@ -221,7 +221,7 @@ environment so current deployments keep working unchanged:
 Better Auth is never selected implicitly. An explicit `AUTH_PROVIDER` takes
 precedence over `ENABLE_AUTH`.
 
-`HAWKIN_CLOUD_DEPLOYMENT=true` requires Supabase-backed auth: requests fail
+`ASKWILD_CLOUD_DEPLOYMENT=true` requires Supabase-backed auth: requests fail
 with a clear error when the resolved provider is `none` or any non-Supabase
 provider.
 
@@ -240,7 +240,7 @@ Anyone who can reach the instance can send prompts, and a prompt is what decides
 
 ### Better Auth
 
-For multi-user self-hosting, this is the recommended provider. Accounts live in Hawkin's own Postgres database, so no external auth service is needed.
+For multi-user self-hosting, this is the recommended provider. Accounts live in Askwild's own Postgres database, so no external auth service is needed.
 
 > **Note**: This provider is new. Its built-in rate limiting for sign-in, sign-up, and password reset is basic and in-process. If the instance is reachable from the internet, put it behind a reverse proxy that enforces its own rate limits and terminates HTTPS.
 
@@ -257,7 +257,7 @@ BOOTSTRAP_ADMIN_EMAIL=you@example.com
 
 `BETTER_AUTH_SECRET` is required in production builds. Keep it stable across restarts.
 
-2. Start Hawkin. The auth tables are created by the database migration. With Docker (`docker compose up -d`), migrations run automatically at container start. For local development (`bun dev` with a local Postgres), run `bun migrate` once before starting the dev server.
+2. Start Askwild. The auth tables are created by the database migration. With Docker (`docker compose up -d`), migrations run automatically at container start. For local development (`bun dev` with a local Postgres), run `bun migrate` once before starting the dev server.
 
 3. Open http://localhost:3000/auth/sign-up and create your account. The first account becomes the instance admin, and the bootstrap window then closes.
 
@@ -287,8 +287,8 @@ SMTP_HOST=smtp.example.com
 SMTP_PORT=587
 SMTP_USER=smtp-user
 SMTP_PASSWORD=smtp-password
-EMAIL_FROM="Hawkin <hawkin@example.com>"
-BETTER_AUTH_URL=https://hawkin.example.com
+EMAIL_FROM="Askwild <askwild@example.com>"
+BETTER_AUTH_URL=https://askwild.example.com
 ```
 
 With SMTP configured, password-reset emails are sent and invitation links are additionally emailed to invitees.
@@ -311,9 +311,9 @@ Better Auth supports generic OIDC authentication for corporate identity provider
 
 ```bash
 OIDC_ISSUER=https://keycloak.example.com/realms/your-realm
-OIDC_CLIENT_ID=hawkin-client
+OIDC_CLIENT_ID=askwild-client
 OIDC_CLIENT_SECRET=your-client-secret
-BETTER_AUTH_URL=https://your-hawkin-url.com
+BETTER_AUTH_URL=https://your-askwild-url.com
 ```
 
 `BETTER_AUTH_URL` is required: it is the canonical origin the provider redirect URI (`<BETTER_AUTH_URL>/api/auth/callback/<OIDC_PROVIDER_ID>`) and the post-SignIn redirect are derived from. Without it, OAuth sign-in is refused at click time even when OIDC is otherwise fully configured.
@@ -357,7 +357,7 @@ Better Auth's API is driven through server actions. Only the provider callback i
 **Identity provider setup:**
 
 1. Create a new OAuth/OIDC client in your identity provider
-2. Set the redirect/callback URL to: `https://your-hawkin-url.com/api/auth/callback/<OIDC_PROVIDER_ID>` (default: `…/callback/oidc`)
+2. Set the redirect/callback URL to: `https://your-askwild-url.com/api/auth/callback/<OIDC_PROVIDER_ID>` (default: `…/callback/oidc`)
 3. Enable authorization code flow with PKCE
 4. Request scopes: `openid`, `profile`, `email` (and any additional scopes like `groups`)
 5. Copy the client ID, client secret, and issuer URL to your environment variables
@@ -366,7 +366,7 @@ Better Auth's API is driven through server actions. Only the provider callback i
 
 ```bash
 OIDC_ISSUER=https://keycloak.example.com/realms/company
-OIDC_CLIENT_ID=hawkin
+OIDC_CLIENT_ID=askwild
 OIDC_CLIENT_SECRET=abc123...
 OIDC_PROVIDER_NAME=Company Login
 ```
@@ -374,8 +374,8 @@ OIDC_PROVIDER_NAME=Company Login
 **Authentik example:**
 
 ```bash
-OIDC_ISSUER=https://authentik.example.com/application/o/hawkin/
-OIDC_CLIENT_ID=hawkin-client
+OIDC_ISSUER=https://authentik.example.com/application/o/askwild/
+OIDC_CLIENT_ID=askwild-client
 OIDC_CLIENT_SECRET=xyz789...
 OIDC_PROVIDER_NAME=Authentik
 ```
@@ -410,24 +410,24 @@ SUPABASE_SECRET_KEY=[YOUR_SUPABASE_SECRET_KEY]
    [YOUR_SITE_URL]/auth/update-password
    ```
 
-   Recovery links point at this URL (the same destination Hawkin has always
+   Recovery links point at this URL (the same destination Askwild has always
    used, so existing allowlist entries keep working). If the destination is
    not allowlisted, Supabase silently falls back to the project Site URL and
    the recovery code can never be exchanged for a session.
 
 5. Optional: keep Supabase's per-IP rate limits per visitor. Sign-up,
    password sign-in, and password reset run as server actions, so Supabase
-   sees the server's address unless Hawkin forwards the visitor's. To
+   sees the server's address unless Askwild forwards the visitor's. To
    forward it, use an `sb_secret_...` key for `SUPABASE_SECRET_KEY` and turn
    on **Authentication → Rate Limits → IP Address Forwarding**. On Vercel
    production and preview deployments this is automatic. Elsewhere,
    including `vercel dev`, set `SUPABASE_FORWARD_CLIENT_IP=true` only when a
-   reverse proxy in front of Hawkin overwrites `X-Forwarded-For`; otherwise
+   reverse proxy in front of Askwild overwrites `X-Forwarded-For`; otherwise
    visitors can spoof it to dodge the limits.
 
 ## Guest Mode
 
-Guest mode allows users to try Hawkin without creating an account. Guest sessions are ephemeral — no chat history is stored.
+Guest mode allows users to try Askwild without creating an account. Guest sessions are ephemeral — no chat history is stored.
 
 ### Enabling Guest Mode
 
@@ -452,7 +452,7 @@ UPSTASH_REDIS_REST_URL=[YOUR_UPSTASH_URL]
 UPSTASH_REDIS_REST_TOKEN=[YOUR_UPSTASH_TOKEN]
 ```
 
-Rate limiting only applies when `HAWKIN_CLOUD_DEPLOYMENT=true`.
+Rate limiting only applies when `ASKWILD_CLOUD_DEPLOYMENT=true`.
 
 ### Recommended Setup
 
@@ -588,7 +588,7 @@ Use Jina for enhanced content extraction:
 JINA_API_KEY=[YOUR_API_KEY]
 ```
 
-Alternatively, a self-hosted [crawl4ai](https://github.com/unclecode/crawl4ai) instance can serve as the fetch backend. When `CRAWL4AI_BASE_URL` is set it handles every fetch the tool performs — both regular and API extraction, PDFs included — and takes precedence over Jina and Tavily. The URL is sent to the crawler's `/crawl` pipeline in two passes: first as a page with the same fit filter the server's `/md` endpoint applies, then, if that yields nothing (Chromium cannot render PDFs), with the server's dedicated PDF scraping strategy. No request to the target is made from the Hawkin server itself; detection runs through the crawler:
+Alternatively, a self-hosted [crawl4ai](https://github.com/unclecode/crawl4ai) instance can serve as the fetch backend. When `CRAWL4AI_BASE_URL` is set it handles every fetch the tool performs — both regular and API extraction, PDFs included — and takes precedence over Jina and Tavily. The URL is sent to the crawler's `/crawl` pipeline in two passes: first as a page with the same fit filter the server's `/md` endpoint applies, then, if that yields nothing (Chromium cannot render PDFs), with the server's dedicated PDF scraping strategy. No request to the target is made from the Askwild server itself; detection runs through the crawler:
 
 ```bash
 CRAWL4AI_BASE_URL=http://localhost:11235
@@ -604,25 +604,25 @@ The sidebar footer shows the running version (linking to the upstream releases p
 # Optional: install-method label shown in the footer. Used verbatim, so any
 # value works (the Docker image sets `docker`). Defaults to `vercel` on
 # Vercel, `source` elsewhere.
-HAWKIN_INSTALL_METHOD=docker
+ASKWILD_INSTALL_METHOD=docker
 
 # Optional: upstream owner/repo whose latest release is checked
-# (default: miurla/hawkin)
-HAWKIN_UPDATE_CHECK_REPO=miurla/hawkin
+# (default: miurla/askwild)
+ASKWILD_UPDATE_CHECK_REPO=miurla/askwild
 
 # Optional: cache window for the release check, in seconds
 # (default: 86400; values below 300 are clamped to 300; unset, empty, or
 # non-numeric values fall back to the default)
-HAWKIN_UPDATE_CHECK_TTL_SECONDS=86400
+ASKWILD_UPDATE_CHECK_TTL_SECONDS=86400
 
 # Optional: set to true to perform no upstream requests at all (default: false)
-HAWKIN_UPDATE_CHECK_DISABLED=false
+ASKWILD_UPDATE_CHECK_DISABLED=false
 
 # Optional: comma-separated email addresses treated as admins for the update
 # link (case-insensitive). Useful when the auth provider has no role concept,
 # e.g. Supabase, where no user carries an `admin` role. No effect in anonymous
 # mode, where every viewer counts as an admin.
-HAWKIN_ADMIN_EMAILS=ops@example.com,me@example.com
+ASKWILD_ADMIN_EMAILS=ops@example.com,me@example.com
 ```
 
-The update link is shown to administrators only: users with the `admin` role, users whose email is listed in `HAWKIN_ADMIN_EMAILS`, or any user when `ENABLE_AUTH=false` (single-operator anonymous mode). The email allowlist only controls visibility of the update link; it grants no privileges elsewhere in the app. The version identifier and install label stay visible to everyone.
+The update link is shown to administrators only: users with the `admin` role, users whose email is listed in `ASKWILD_ADMIN_EMAILS`, or any user when `ENABLE_AUTH=false` (single-operator anonymous mode). The email allowlist only controls visibility of the update link; it grants no privileges elsewhere in the app. The version identifier and install label stay visible to everyone.

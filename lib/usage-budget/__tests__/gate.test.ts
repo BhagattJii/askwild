@@ -50,7 +50,7 @@ describe('usage budget gate', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mocks.redisSignals.length = 0
-    process.env.HAWKIN_CLOUD_DEPLOYMENT = 'true'
+    process.env.ASKWILD_CLOUD_DEPLOYMENT = 'true'
     process.env.UPSTASH_REDIS_REST_URL = 'https://redis.example.test'
     process.env.UPSTASH_REDIS_REST_TOKEN = 'token'
     mocks.resolveUsageAnchor.mockResolvedValue(anchor)
@@ -73,8 +73,8 @@ describe('usage budget gate', () => {
     vi.useRealTimers()
   })
 
-  it('bypasses Redis outside Indra Cloud', async () => {
-    process.env.HAWKIN_CLOUD_DEPLOYMENT = 'false'
+  it('bypasses Redis outside Askwild Cloud', async () => {
+    process.env.ASKWILD_CLOUD_DEPLOYMENT = 'false'
 
     const result = await consumeUsage({
       userId: 'user-1',

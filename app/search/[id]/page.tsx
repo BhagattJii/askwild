@@ -54,7 +54,7 @@ export default async function SearchPage(props: {
     redirect(`/auth/login?next=${encodeURIComponent(`/search/${id}`)}`)
   }
 
-  const isCloudDeployment = process.env.HAWKIN_CLOUD_DEPLOYMENT === 'true'
+  const isCloudDeployment = process.env.ASKWILD_CLOUD_DEPLOYMENT === 'true'
   const libraryAvailable = !isAnonymousMode()
   const modelSelectorData = await getModelSelectorData()
 
