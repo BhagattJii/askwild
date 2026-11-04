@@ -1,4 +1,5 @@
 import { betterAuthProvider } from '@/lib/auth/providers/better-auth'
+import { clerkAuthProvider } from '@/lib/auth/providers/clerk'
 import { noneAuthProvider } from '@/lib/auth/providers/none'
 import { supabaseAuthProvider } from '@/lib/auth/providers/supabase'
 import type {
@@ -10,6 +11,7 @@ import type {
 const AUTH_PROVIDER_NAMES: AuthProviderName[] = [
   'supabase',
   'better-auth',
+  'clerk',
   'none'
 ]
 
@@ -17,6 +19,7 @@ const AUTH_PROVIDER_NAMES: AuthProviderName[] = [
 const providerRegistry: Partial<Record<AuthProviderName, AuthProvider>> = {
   supabase: supabaseAuthProvider,
   'better-auth': betterAuthProvider,
+  clerk: clerkAuthProvider,
   none: noneAuthProvider
 }
 

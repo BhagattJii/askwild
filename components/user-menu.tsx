@@ -38,9 +38,10 @@ import { ExternalLinkItems } from './external-link-items'
 
 interface UserMenuProps {
   user: AppUser
+  showAdminPanel?: boolean
 }
 
-export default function UserMenu({ user }: UserMenuProps) {
+export default function UserMenu({ user, showAdminPanel = true }: UserMenuProps) {
   const router = useRouter()
   const [menuOpen, setMenuOpen] = useState(false)
   const [accountOpen, setAccountOpen] = useState(false)
@@ -134,7 +135,7 @@ export default function UserMenu({ user }: UserMenuProps) {
             <UserRound className="size-4" />
             <span>Account</span>
           </DropdownMenuItem>
-          {user.role === 'admin' && (
+          {user.role === 'admin' && showAdminPanel && (
             <DropdownMenuItem asChild>
               <Link href="/auth/admin">
                 <IconShield className="size-4" />

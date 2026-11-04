@@ -1,4 +1,6 @@
-import { type NextRequest, NextResponse } from 'next/server'
+import { type NextFetchEvent, type NextRequest, NextResponse } from 'next/server'
+
+import { clerkMiddleware } from '@clerk/nextjs/server'
 
 import {
   exceedsRelayBodyCap,
@@ -32,7 +34,7 @@ function relayRewrite(request: NextRequest): NextResponse | null {
   })
 }
 
-export async function proxy(request: NextRequest) {
+export async function proxy(request: NextRequest, event?: NextFetchEvent) {
   if (isMaintenanceMode()) {
     return maintenanceResponse(request.nextUrl.pathname)
   }
@@ -57,7 +59,15 @@ export async function proxy(request: NextRequest) {
   // (supabase refreshes/validates the session, none passes through)
   let response: NextResponse
 
-  response = await getAuthProvider().handleSession(request)
+  if (resolveAuthProviderName() === 'clerk') {
+    // Clerk resolves and refreshes the session itself and injects the
+    // auth state into the request headers for server components.
+    const clerkEvent =
+      event ?? ({ waitUntil: () => {} } as unknown as NextFetchEvent)
+    response = (await clerkMiddleware(request, clerkEvent)) as NextResponse
+  } else {
+    response = await getAuthProvider().handleSession(request)
+  }
 
   // Add request information to response headers
   response.headers.set('x-url', request.url)

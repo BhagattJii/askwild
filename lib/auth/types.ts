@@ -2,7 +2,7 @@ import type { NextRequest, NextResponse } from 'next/server'
 
 import type { db } from '@/lib/db'
 
-export type AuthProviderName = 'supabase' | 'better-auth' | 'none'
+export type AuthProviderName = 'supabase' | 'better-auth' | 'clerk' | 'none'
 
 /**
  * Provider-agnostic user profile resolved by the server-side identity seam

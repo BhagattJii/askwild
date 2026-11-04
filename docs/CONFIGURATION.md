@@ -11,6 +11,7 @@ This guide covers the optional features and their configuration in Askwild.
   - [Auth Provider](#auth-provider-auth_provider)
   - [Anonymous Mode](#anonymous-mode-default)
   - [Better Auth](#better-auth)
+  - [Clerk](#clerk)
   - [Supabase](#supabase)
 - [Guest Mode](#guest-mode)
 - [Other Features](#other-features)
@@ -192,12 +193,13 @@ If not configured, `type="general"` searches fall back to your configured search
 
 ## Authentication
 
-Askwild has three auth providers. Pick the one that matches how the instance is used:
+Askwild has four auth providers. Pick the one that matches how the instance is used:
 
 | Use case                           | Provider                                  |
 | ---------------------------------- | ----------------------------------------- |
 | Personal, single user              | [Anonymous mode](#anonymous-mode-default) |
 | Self-hosted, multiple users        | [Better Auth](#better-auth)               |
+| Hosted sign-in with social login   | [Clerk](#clerk)                           |
 | You already run a Supabase project | [Supabase](#supabase)                     |
 
 ### Auth Provider (`AUTH_PROVIDER`)
@@ -208,6 +210,7 @@ Set `AUTH_PROVIDER` explicitly to one of:
 | ------------- | --------------------------------------------------------------- |
 | `none`        | Anonymous mode: all users share one user ID                     |
 | `better-auth` | Built-in accounts stored in Askwild's own Postgres (multi-user) |
+| `clerk`       | Hosted Clerk authentication (sign-in, social login, email)      |
 | `supabase`    | Supabase cloud authentication (multi-user)                      |
 
 When `AUTH_PROVIDER` is **unset**, the provider is derived from the existing
@@ -382,6 +385,33 @@ OIDC_PROVIDER_NAME=Authentik
 
 When OIDC is configured, users can sign in with their corporate accounts. Email/password registration and login remain available for admin bootstrap and local accounts.
 
+### Clerk
+
+For a hosted sign-in experience with social login, password reset and email verification handled by Clerk.
+
+#### Setup
+
+1. Create an application at [dashboard.clerk.com](https://dashboard.clerk.com) and copy the API keys.
+
+2. Set the following environment variables:
+
+```bash
+AUTH_PROVIDER=clerk
+NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_live_...
+CLERK_SECRET_KEY=sk_live_...
+# Comma-separated allowlist of admin emails (Clerk has no roles).
+ASKWILD_ADMIN_EMAILS=you@example.com
+```
+
+3. In the Clerk dashboard, enable the sign-in methods you want (email/password, Google, …) and add your production domain under "Domains".
+
+#### Behavior
+
+- `/auth/login` renders Clerk's hosted sign-in component; sign-up runs from the same screen.
+- Password reset and email verification emails are sent by Clerk, so no SMTP variables are needed.
+- Admin access is granted through the `ASKWILD_ADMIN_EMAILS` allowlist. The Better Auth admin console (invitations, member roles) stays hidden; manage those users in the Clerk dashboard.
+- Account deletion removes the Clerk user and the Askwild-side data (chats, notes, library files, feedback).
+
 ### Supabase
 
 For deployments that already use Supabase, or that prefer a hosted auth service.
@@ -460,6 +490,7 @@ Rate limiting only applies when `ASKWILD_CLOUD_DEPLOYMENT=true`.
 | ----------------------- | ----------------------------------------------- |
 | Personal/Local          | `ENABLE_AUTH=false` (anonymous mode)            |
 | Self-hosted, multi-user | `AUTH_PROVIDER=better-auth` (built-in accounts) |
+| Hosted sign-in          | `AUTH_PROVIDER=clerk` (Clerk dashboard keys)    |
 | Public Demo             | `ENABLE_GUEST_CHAT=true` with rate limiting     |
 | Production              | `ENABLE_AUTH=true` (Supabase authentication)    |
 
