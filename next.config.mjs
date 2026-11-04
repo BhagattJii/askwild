@@ -5,7 +5,33 @@ const nextConfig = {
     staleTimes: { dynamic: 300 }
   },
   async headers() {
+    const hardenedHeaders = [
+      {
+        key: 'X-Frame-Options',
+        value: 'DENY'
+      },
+      {
+        key: 'X-Content-Type-Options',
+        value: 'nosniff'
+      },
+      {
+        // Same coverage as X-Frame-Options for modern browsers, declared
+        // explicitly so CSP-aware embeds stay blocked too.
+        key: 'Content-Security-Policy',
+        value: "frame-ancestors 'none'"
+      },
+      {
+        key: 'Permissions-Policy',
+        value:
+          'camera=(), microphone=(), geolocation=(), payment=(), usb=(), interest-cohort=()'
+      }
+    ]
+
     return [
+      {
+        source: '/:path*',
+        headers: hardenedHeaders
+      },
       {
         // Only the auth pages carry one-time credentials in ?token=
         // (invitations, password resets, bootstrap). no-referrer on those

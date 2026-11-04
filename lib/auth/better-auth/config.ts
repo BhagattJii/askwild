@@ -413,8 +413,22 @@ function createAuth() {
     appName: 'Hawkin',
     secret: getSecret(),
     database: drizzleAdapter(db, { provider: 'pg', schema: authSchema }),
+    // Only the canonical deployment origin may initiate auth flows; other
+    // origins are rejected (blocks cross-site session hijack attempts).
+    trustedOrigins: [
+      ...(process.env.BETTER_AUTH_URL ? [process.env.BETTER_AUTH_URL.trim()] : [])
+    ].filter(Boolean),
+    // Throttle credential guessing on every auth action. In-memory storage
+    // throttles per serverless instance; the Vercel attack-challenge layer
+    // covers volumetric floods, this covers targeted brute force.
+    rateLimit: {
+      enabled: true,
+      window: 60,
+      max: process.env.NODE_ENV === 'production' ? 30 : 100
+    },
     emailAndPassword: {
       enabled: true,
+      minPasswordLength: 10,
       // better-auth 1.7 removed the built-in nodemailer transport: without
       // this callback, requestPasswordReset fails with RESET_PASSWORD_DISABLED
       // even when the SMTP variables are present. Hawkin does not use email
