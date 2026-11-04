@@ -405,6 +405,21 @@ ASKWILD_ADMIN_EMAILS=you@example.com
 
 3. In the Clerk dashboard, enable the sign-in methods you want (email/password, Google, …) and add your production domain under "Domains".
 
+#### Production domain requirement
+
+Clerk refuses to create a **production instance** on a provider subdomain: `*.vercel.app`, `*.lcl.dev` and `*.accounts.dev` are rejected with `provider_domain_operation_not_allowed` / `reserved_domain`. A production instance therefore needs a domain you own (for example `askwild.dev`).
+
+While no domain is owned, Askwild runs on the Clerk **development instance** (`pk_test_…` / `sk_test_…`):
+
+- Everything works (email/password, Google, GitHub, password reset, email verification).
+- The instance is capped at **100 monthly active users** and is labelled a development instance in the Clerk dashboard.
+
+#### Upgrading to a production instance
+
+1. Point the new domain at the Vercel project and add it to Clerk → Domains.
+2. Create the production instance for that domain in the Clerk dashboard and copy the `pk_live_…` / `sk_live_…` keys.
+3. Update the Vercel production environment variables (`NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`, `CLERK_SECRET_KEY`, plus `NEXT_PUBLIC_CLERK_SIGN_IN_URL=/auth/login` and `NEXT_PUBLIC_CLERK_SIGN_UP_URL=/auth/login`) and redeploy. No code change is required.
+
 #### Behavior
 
 - `/auth/login` renders Clerk's hosted sign-in component; sign-up runs from the same screen.
