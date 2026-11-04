@@ -39,7 +39,7 @@ const description =
   'Askwild — fast, private, AI-powered search built for India. Answers with live sources, citations and images.'
 
 export const metadata: Metadata = {
-  metadataBase: new URL('https://hawkin-two.vercel.app'),
+  metadataBase: new URL('https://askwild.vercel.app'),
   title,
   description,
   openGraph: {

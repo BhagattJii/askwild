@@ -13,17 +13,17 @@ import { DropdownMenuItem } from '@/components/ui/dropdown-menu'
 const externalLinks = [
   {
     name: 'App',
-    href: 'https://hawkin-two.vercel.app',
+    href: 'https://askwild.vercel.app',
     icon: <SiX className="size-4" />
   },
   {
     name: 'Issues',
-    href: 'https://github.com/BhagattJii/hawkin/issues',
+    href: 'https://github.com/BhagattJii/askwild/issues',
     icon: <SiDiscord className="size-4" />
   },
   {
     name: 'GitHub',
-    href: 'https://github.com/BhagattJii/hawkin',
+    href: 'https://github.com/BhagattJii/askwild',
     icon: <SiGithub className="size-4" />
   }
 ]
