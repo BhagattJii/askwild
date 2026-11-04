@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next'
 import { Inter as FontSans } from 'next/font/google'
 
+import { ClerkProvider } from '@clerk/nextjs'
 import { Analytics } from '@vercel/analytics/next'
 
 import { getCurrentUser, getCurrentUserId } from '@/lib/auth/get-current-user'
@@ -60,6 +61,25 @@ export const viewport: Viewport = {
   maximumScale: 1
 }
 
+/**
+ * Mounts Clerk's provider only when the Clerk provider is active. Clerk
+ * throws without a publishable key, so better-auth/anonymous deployments
+ * must keep their previous provider-less tree.
+ */
+function ClerkGate({
+  enabled,
+  children
+}: Readonly<{ enabled: boolean; children: React.ReactNode }>) {
+  if (!enabled) {
+    return <>{children}</>
+  }
+  return (
+    <ClerkProvider dynamic signInUrl="/auth/login" signUpUrl="/auth/login">
+      {children}
+    </ClerkProvider>
+  )
+}
+
 export default async function RootLayout({
   children
 }: Readonly<{
@@ -77,6 +97,10 @@ export default async function RootLayout({
   )
 
   const userId = user?.id ?? (await getCurrentUserId())
+  const clerkEnabled = process.env.AUTH_PROVIDER === 'clerk'
+  // The admin console lists Better Auth invitations/users; Clerk admins are
+  // managed in the Clerk dashboard, so the entry point is hidden there.
+  const showAdminPanel = authProvider.name === 'better-auth'
   const isCloudDeployment = process.env.ASKWILD_CLOUD_DEPLOYMENT === 'true'
   const usageBudgetEnabled = Boolean(
     user &&
@@ -118,6 +142,7 @@ export default async function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
+          <ClerkGate enabled={clerkEnabled}>
           <PostHogProvider userId={user?.id ?? null}>
             <AppUserProvider user={user} capabilities={capabilities}>
               <UserProvider hasUser={!!userId}>
@@ -128,7 +153,7 @@ export default async function RootLayout({
                       initialUsage={initialUsage}
                       enabled={usageBudgetEnabled}
                     >
-                      <AppSidebar user={user} />
+                      <AppSidebar user={user} showAdminPanel={showAdminPanel} />
                       <KeyboardShortcutHandler />
                       <div className="flex flex-col flex-1 min-w-0">
                         <Header user={user} />
@@ -142,6 +167,7 @@ export default async function RootLayout({
               </UserProvider>
             </AppUserProvider>
           </PostHogProvider>
+          </ClerkGate>
           <Toaster />
           {isCloudDeployment && <Analytics />}
         </ThemeProvider>

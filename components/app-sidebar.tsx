@@ -19,11 +19,17 @@ import { ChatHistorySection } from './sidebar/chat-history-section'
 import { ChatHistorySkeleton } from './sidebar/chat-history-skeleton'
 import { LibraryMenuItem } from './sidebar/library-menu-item'
 import { NewChatMenuItem } from './sidebar/new-chat-menu-item'
+import { IconLogo } from './ui/icons'
 import GuestMenu from './guest-menu'
 import UserMenu from './user-menu'
-import { IconLogo } from './ui/icons'
 
-export default function AppSidebar({ user }: { user?: AppUser | null }) {
+export default function AppSidebar({
+  user,
+  showAdminPanel = true
+}: {
+  user?: AppUser | null
+  showAdminPanel?: boolean
+}) {
   // Anonymous mode has no per-user library, and the server actions reject it,
   // so the entry point follows the same switch the pages use.
   const libraryAvailable = !isAnonymousMode()
@@ -49,7 +55,11 @@ export default function AppSidebar({ user }: { user?: AppUser | null }) {
         </div>
       </SidebarContent>
       <SidebarFooter>
-        {user ? <UserMenu user={user} /> : <GuestMenu />}
+        {user ? (
+          <UserMenu user={user} showAdminPanel={showAdminPanel} />
+        ) : (
+          <GuestMenu />
+        )}
       </SidebarFooter>
       <SidebarRail />
     </Sidebar>
