@@ -134,7 +134,7 @@ describe('auth provider dispatch', () => {
     })
   })
 
-  describe('Hawkin Cloud deployment guard', () => {
+  describe('Indra Cloud deployment guard', () => {
     beforeEach(() => {
       process.env.HAWKIN_CLOUD_DEPLOYMENT = 'true'
     })

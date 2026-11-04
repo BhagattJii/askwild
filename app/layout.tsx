@@ -34,12 +34,12 @@ const fontSans = FontSans({
   variable: '--font-sans'
 })
 
-const title = 'Hawkin'
+const title = 'Indra'
 const description =
-  'A fully open-source AI-powered answer engine with a generative UI.'
+  'Indra — fast, private, AI-powered search built for India. Answers with live sources, citations and images.'
 
 export const metadata: Metadata = {
-  metadataBase: new URL('https://hawkin.sh'),
+  metadataBase: new URL('https://hawkin-two.vercel.app'),
   title,
   description,
   openGraph: {
@@ -49,8 +49,7 @@ export const metadata: Metadata = {
   twitter: {
     title,
     description,
-    card: 'summary_large_image',
-    creator: '@miiura'
+    card: 'summary_large_image'
   }
 }
 
@@ -129,7 +128,7 @@ export default async function RootLayout({
                       initialUsage={initialUsage}
                       enabled={usageBudgetEnabled}
                     >
-                      {userId && <AppSidebar user={user} />}
+                      <AppSidebar user={user} />
                       <KeyboardShortcutHandler />
                       <div className="flex flex-col flex-1 min-w-0">
                         <Header user={user} />

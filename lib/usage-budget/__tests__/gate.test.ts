@@ -73,7 +73,7 @@ describe('usage budget gate', () => {
     vi.useRealTimers()
   })
 
-  it('bypasses Redis outside Hawkin Cloud', async () => {
+  it('bypasses Redis outside Indra Cloud', async () => {
     process.env.HAWKIN_CLOUD_DEPLOYMENT = 'false'
 
     const result = await consumeUsage({

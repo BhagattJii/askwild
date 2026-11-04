@@ -1,6 +1,6 @@
 <div align="center">
 
-# hawkin
+# Indra
 
 **AI-powered search engine — private, free, no tracking.**
 
@@ -29,8 +29,8 @@ Just visit the live instance and start asking questions. No signup required.
 ### Run your own
 ```bash
 # Clone and install
-git clone https://github.com/BhagattJii/hawkin
-cd hawkin
+git clone https://github.com/BhagattJii/indra
+cd indra
 bun install
 
 # Configure
@@ -48,9 +48,9 @@ Environment variables (all optional):
 
 ---
 
-## Why hawkin?
+## Why indra?
 
-Most search engines track you, show ads, or limit free usage. hawkin was built to be different: **you ask, it answers, nobody watches.**
+Most search engines track you, show ads, or limit free usage. indra was built to be different: **you ask, it answers, nobody watches.**
 
 ---
 

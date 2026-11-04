@@ -36,7 +36,7 @@ async function fetchRegularData(url: string): Promise<SearchResultsType> {
     const response = await safeFetch(url, {
       signal: controller.signal,
       headers: {
-        'User-Agent': 'Mozilla/5.0 (compatible; Hawkin/1.0)',
+        'User-Agent': 'Mozilla/5.0 (compatible; Indra/1.0)',
         Accept:
           'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
       }
@@ -189,7 +189,7 @@ async function fetchTavilyExtractData(url: string): Promise<SearchResultsType> {
 
 // crawl4ai's /crawl is called in two passes: a browser render first, then the
 // PDF scraping strategy for anything the render could not extract, since
-// Chromium cannot render PDFs. Hawkin itself never requests the origin.
+// Chromium cannot render PDFs. Indra itself never requests the origin.
 interface Crawl4aiCrawlResult {
   url?: string
   redirected_url?: string | null

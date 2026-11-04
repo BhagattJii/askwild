@@ -59,7 +59,7 @@ export function ErrorModal({
       case 'rate-limit':
         return 'Rate Limit Exceeded'
       case 'auth':
-        return 'Continue with Hawkin'
+        return 'Continue with Indra'
       case 'forbidden':
         return 'Access Denied'
       default:
@@ -77,7 +77,7 @@ export function ErrorModal({
       case 'auth':
         return (
           error.message ||
-          'To use Hawkin, sign in to your account or create a new one.'
+          'To use Indra, sign in to your account or create a new one.'
         )
       case 'forbidden':
         return 'You do not have permission to access this resource.'

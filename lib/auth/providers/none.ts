@@ -7,7 +7,7 @@ export const DEFAULT_ANONYMOUS_USER_ID = 'anonymous-user'
 /**
  * Anonymous mode (`ENABLE_AUTH=false`): all users share one configured user
  * ID. Preserves the previous skip-authentication behavior, including the
- * Hawkin Cloud guard and the startup warning.
+ * Indra Cloud guard and the startup warning.
  */
 export const noneAuthProvider: AuthProvider = {
   name: 'none',
@@ -25,7 +25,7 @@ export const noneAuthProvider: AuthProvider = {
   },
 
   async getCurrentUserId(): Promise<string | undefined> {
-    // Guard: Prevent disabling auth in Hawkin Cloud deployments
+    // Guard: Prevent disabling auth in Indra Cloud deployments
     if (process.env.HAWKIN_CLOUD_DEPLOYMENT === 'true') {
       throw new Error(
         'ENABLE_AUTH=false is not allowed in HAWKIN_CLOUD_DEPLOYMENT'

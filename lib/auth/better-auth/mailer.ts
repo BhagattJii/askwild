@@ -1,7 +1,7 @@
 import nodemailer from 'nodemailer'
 
 /**
- * Shared SMTP plumbing for every email Hawkin's better-auth provider
+ * Shared SMTP plumbing for every email Indra's better-auth provider
  * delivers (password resets, invitation emails). better-auth 1.7 removed
  * its built-in nodemailer transport, so the `email.server` option no
  * longer sends anything; delivery goes through the callbacks in
@@ -30,7 +30,7 @@ export async function sendSmtpMail(message: {
   })
 
   await transporter.sendMail({
-    from: process.env.EMAIL_FROM ?? 'Hawkin <noreply@hawkin.local>',
+    from: process.env.EMAIL_FROM ?? 'Indra <noreply@hawkin.local>',
     ...message
   })
 }

@@ -125,7 +125,7 @@ const BOOTSTRAP_INVITE_COOLDOWN_MS = 15 * 60 * 1000
  * Serializes the bootstrap cooldown check + invitation creation + send per
  * address. The check and the insert are separate queries, so concurrent
  * tokenless sign-ups for the gated address could all pass the check before
- * the first insert landed and each mail a live admin link. Hawkin runs as
+ * the first insert landed and each mail a live admin link. Indra runs as
  * a single instance, so an in-process chain per address is sufficient.
  */
 const bootstrapSendLocks = new Map<string, Promise<unknown>>()
@@ -177,7 +177,7 @@ async function clientIp(): Promise<string> {
 /**
  * Bounds repeated auth attempts per IP+email and per email alone.
  * better-auth's own rate limiter only runs in its HTTP handler, which
- * Hawkin does not mount, so the direct auth.api.* actions need their
+ * Indra does not mount, so the direct auth.api.* actions need their
  * own throttle. The IP comes from a caller-supplied header, so the
  * email-only bucket is what bounds guessing against one account when
  * that header is rotated.
@@ -440,7 +440,7 @@ export const betterAuthProvider: AuthProvider = {
             try {
               await sendSmtpMail({
                 to: email,
-                subject: 'Finish creating your Hawkin admin account',
+                subject: 'Finish creating your Indra admin account',
                 text: `Use this link to finish creating the admin account for ${email} (valid for one week): ${origin}/auth/sign-up?token=${inviteToken}`,
                 html: `<p>Use this link to finish creating the admin account for ${email} (valid for one week):</p><p><a href="${origin}/auth/sign-up?token=${inviteToken}">Complete sign-up</a></p>`
               })

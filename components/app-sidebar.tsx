@@ -8,6 +8,7 @@ import { cn } from '@/lib/utils'
 import {
   Sidebar,
   SidebarContent,
+  SidebarFooter,
   SidebarHeader,
   SidebarMenu,
   SidebarRail,
@@ -18,9 +19,11 @@ import { ChatHistorySection } from './sidebar/chat-history-section'
 import { ChatHistorySkeleton } from './sidebar/chat-history-skeleton'
 import { LibraryMenuItem } from './sidebar/library-menu-item'
 import { NewChatMenuItem } from './sidebar/new-chat-menu-item'
+import GuestMenu from './guest-menu'
+import UserMenu from './user-menu'
 import { IconLogo } from './ui/icons'
 
-export default function AppSidebar(_props: { user?: AppUser | null }) {
+export default function AppSidebar({ user }: { user?: AppUser | null }) {
   // Anonymous mode has no per-user library, and the server actions reject it,
   // so the entry point follows the same switch the pages use.
   const libraryAvailable = !isAnonymousMode()
@@ -30,7 +33,7 @@ export default function AppSidebar(_props: { user?: AppUser | null }) {
       <SidebarHeader className="flex flex-row justify-between items-center">
         <Link href="/" className="flex items-center gap-2 px-2 py-3">
           <IconLogo className={cn('size-5')} />
-          <span className="font-semibold text-sm">Hawkin</span>
+          <span className="font-semibold text-sm">Indra</span>
         </Link>
         <SidebarTrigger />
       </SidebarHeader>
@@ -45,7 +48,9 @@ export default function AppSidebar(_props: { user?: AppUser | null }) {
           </Suspense>
         </div>
       </SidebarContent>
-      {/* Version footer intentionally removed */}
+      <SidebarFooter>
+        {user ? <UserMenu user={user} /> : <GuestMenu />}
+      </SidebarFooter>
       <SidebarRail />
     </Sidebar>
   )

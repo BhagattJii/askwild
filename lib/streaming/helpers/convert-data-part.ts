@@ -4,7 +4,7 @@ import { randomUUID } from 'crypto'
 import { isValidDataPartNonce } from './data-part-nonce'
 
 /**
- * Maps Hawkin's user-authored data parts into model input for
+ * Maps Indra's user-authored data parts into model input for
  * `convertToModelMessages({ convertDataPart })`. Returning `undefined` drops
  * the part from the model message.
  *

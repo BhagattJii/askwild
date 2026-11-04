@@ -69,7 +69,7 @@ describe('none auth provider (anonymous mode)', () => {
     vi.unstubAllEnvs()
   })
 
-  it('refuses to resolve the anonymous identity in Hawkin Cloud deployments', async () => {
+  it('refuses to resolve the anonymous identity in Indra Cloud deployments', async () => {
     process.env.HAWKIN_CLOUD_DEPLOYMENT = 'true'
 
     await expect(noneAuthProvider.getCurrentUserId?.()).rejects.toThrow(
