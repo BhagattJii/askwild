@@ -13,7 +13,6 @@ import { Button } from './ui/button'
 import { FeedbackModal } from './feedback-modal'
 // import { Button } from './ui/button' // No longer needed directly here for Sign In button
 import GuestMenu from './guest-menu' // Import the new GuestMenu component
-import UserMenu from './user-menu'
 
 interface HeaderProps {
   user: AppUser | null
@@ -47,7 +46,7 @@ export const Header: React.FC<HeaderProps> = ({ user }) => {
               Feedback
             </Button>
           )}
-          {user ? <UserMenu user={user} /> : <GuestMenu />}
+          {user ? null : <GuestMenu />}
         </div>
       </header>
 
