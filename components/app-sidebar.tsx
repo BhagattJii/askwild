@@ -21,14 +21,12 @@ import { LibraryMenuItem } from './sidebar/library-menu-item'
 import { NewChatMenuItem } from './sidebar/new-chat-menu-item'
 import { IconLogo } from './ui/icons'
 import GuestMenu from './guest-menu'
-import UserMenu from './user-menu'
+import UserProfile from './user-profile'
 
 export default function AppSidebar({
-  user,
-  showAdminPanel = true
+  user
 }: {
   user?: AppUser | null
-  showAdminPanel?: boolean
 }) {
   // Anonymous mode has no per-user library, and the server actions reject it,
   // so the entry point follows the same switch the pages use.
@@ -55,11 +53,7 @@ export default function AppSidebar({
         </div>
       </SidebarContent>
       <SidebarFooter>
-        {user ? (
-          <UserMenu user={user} showAdminPanel={showAdminPanel} />
-        ) : (
-          <GuestMenu />
-        )}
+        {user ? <UserProfile user={user} /> : <GuestMenu />}
       </SidebarFooter>
       <SidebarRail />
     </Sidebar>

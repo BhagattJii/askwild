@@ -98,9 +98,6 @@ export default async function RootLayout({
 
   const userId = user?.id ?? (await getCurrentUserId())
   const clerkEnabled = process.env.AUTH_PROVIDER === 'clerk'
-  // The admin console lists Better Auth invitations/users; Clerk admins are
-  // managed in the Clerk dashboard, so the entry point is hidden there.
-  const showAdminPanel = authProvider.name === 'better-auth'
   const isCloudDeployment = process.env.ASKWILD_CLOUD_DEPLOYMENT === 'true'
   const usageBudgetEnabled = Boolean(
     user &&
@@ -153,7 +150,7 @@ export default async function RootLayout({
                       initialUsage={initialUsage}
                       enabled={usageBudgetEnabled}
                     >
-                      <AppSidebar user={user} showAdminPanel={showAdminPanel} />
+                      <AppSidebar user={user} />
                       <KeyboardShortcutHandler />
                       <div className="flex flex-col flex-1 min-w-0">
                         <Header user={user} />

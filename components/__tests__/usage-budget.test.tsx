@@ -12,7 +12,7 @@ import {
 } from '@/components/usage-budget-provider'
 import { UsageDialog } from '@/components/usage-dialog'
 import { UsageLimitDialog } from '@/components/usage-limit-dialog'
-import UserMenu from '@/components/user-menu'
+import UserProfile from '@/components/user-profile'
 
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: vi.fn(), refresh: vi.fn() })
@@ -150,57 +150,32 @@ describe('usage budget UI', () => {
     expect(screen.getByText('47')).toBeInTheDocument()
   })
 
-  test('does not sync when the account menu merely opens and syncs on Usage selection', async () => {
+  test('shows the remaining usage inline in the profile without syncing', () => {
     const fetchMock = vi.mocked(fetch)
-    fetchMock.mockResolvedValue(
-      new Response(
-        JSON.stringify({
-          remaining: 80,
-          limit: 100,
-          resetAt: initialUsage.resetAt
-        }),
-        { status: 200, headers: { 'Content-Type': 'application/json' } }
-      )
-    )
 
     render(
       <UsageBudgetProvider initialUsage={initialUsage}>
-        <UserMenu user={user} />
+        <UserProfile user={user} />
       </UsageBudgetProvider>
     )
 
-    fireEvent.click(screen.getByRole('button', { name: 'Open account menu' }))
-
-    expect(screen.getByText('Usage')).toBeInTheDocument()
     expect(screen.getByText('82 / 100')).toBeInTheDocument()
     expect(fetchMock).not.toHaveBeenCalled()
-
-    fireEvent.click(screen.getByText('Usage'))
-
-    await waitFor(() => {
-      expect(fetchMock).toHaveBeenCalledWith('/api/usage', {
-        method: 'GET',
-        headers: { Accept: 'application/json' }
-      })
-    })
-    expect(
-      screen.getByRole('heading', { name: 'Monthly usage' })
-    ).toBeInTheDocument()
   })
 
-  test.each([
-    [20, 'Open account menu. Monthly usage is running low.'],
-    [0, 'Open account menu. Monthly usage limit reached.']
-  ])('shows a persistent status dot at %i remaining', (remaining, label) => {
-    render(
-      <UsageBudgetProvider initialUsage={{ ...initialUsage, remaining }}>
-        <UserMenu user={user} />
-      </UsageBudgetProvider>
-    )
+  test.each([20, 0])(
+    'shows a persistent status dot at %i remaining',
+    (remaining: number) => {
+      render(
+        <UsageBudgetProvider initialUsage={{ ...initialUsage, remaining }}>
+          <UserProfile user={user} />
+        </UsageBudgetProvider>
+      )
 
-    expect(screen.getByRole('button', { name: label })).toBeInTheDocument()
-    expect(screen.getByTestId('usage-status-dot')).toBeInTheDocument()
-  })
+      expect(screen.getByTestId('usage-status-dot')).toBeInTheDocument()
+      expect(screen.getByText(`${remaining} / 100`)).toBeInTheDocument()
+    }
+  )
 
   test('shows the English composer warning only when usage is low', () => {
     const { rerender } = render(
