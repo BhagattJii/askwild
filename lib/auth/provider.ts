@@ -27,7 +27,14 @@ function enforceCloudDeploymentGuard(
   name: AuthProviderName,
   explicitlyConfigured: boolean
 ): void {
-  if (process.env.ASKWILD_CLOUD_DEPLOYMENT !== 'true' || name === 'supabase') {
+  if (
+    process.env.ASKWILD_CLOUD_DEPLOYMENT !== 'true' ||
+    name === 'supabase' ||
+    // Clerk is a full hosted auth provider: usage budgets and limits
+    // resolve users through getCurrentUser(), which works identically
+    // under Clerk sessions, so the cloud gate may not block it.
+    name === 'clerk'
+  ) {
     return
   }
   if (name === 'none' && !explicitlyConfigured) {
