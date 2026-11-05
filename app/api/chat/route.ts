@@ -14,6 +14,7 @@ import { generateId } from '@/lib/db/schema'
 import { checkAndEnforceAdaptiveLimit } from '@/lib/rate-limit/adaptive-limit'
 import { checkAndEnforceOverallChatLimit } from '@/lib/rate-limit/chat-limits'
 import { checkAndEnforceGuestLimit } from '@/lib/rate-limit/guest-limit'
+import { parseAdminEmails } from '@/lib/version/admins'
 import {
   ADAPTIVE_MODE_AUTH_REQUIRED_MESSAGE,
   isAdaptiveModeAuthBlocked
@@ -107,6 +108,15 @@ export async function POST(req: Request) {
       currentUser?.id ?? (anonymous ? await getCurrentUserId() : undefined)
     perfTime('Auth completed', authStart)
 
+    // Admins (and allowlisted owner emails) are exempt from every usage
+    // and rate limit: daily chat caps, adaptive search caps, guest caps,
+    // and the monthly budget. The role is verified server-side from the
+    // session, so a tampered client cannot claim it.
+    const isAdminViewer =
+      currentUser?.role === 'admin' ||
+      (!!currentUser?.email &&
+        parseAdminEmails(process.env).has(currentUser.email.toLowerCase()))
+
     if (isSharePage) {
       return new Response('Chat API is not available on share pages', {
         status: 403,
@@ -149,7 +159,7 @@ export async function POST(req: Request) {
       })
     }
 
-    if (isGuest) {
+    if (isGuest && !isAdminViewer) {
       const forwardedFor = req.headers.get('x-forwarded-for') || ''
       const ip =
         forwardedFor.split(',')[0]?.trim() ||
@@ -159,7 +169,8 @@ export async function POST(req: Request) {
       if (guestLimitResponse) return guestLimitResponse
     }
 
-    const usageBudgetAvailable = !isGuest && isUsageBudgetAvailable()
+    const usageBudgetAvailable =
+      !isGuest && !isAdminViewer && isUsageBudgetAvailable()
     if (
       usageBudgetAvailable &&
       ENFORCEMENT === 'on' &&
@@ -230,7 +241,7 @@ export async function POST(req: Request) {
       )
     }
 
-    if (!isGuest) {
+    if (!isGuest && !isAdminViewer) {
       const overallLimitResponse = await checkAndEnforceOverallChatLimit(userId)
       if (overallLimitResponse) return overallLimitResponse
 
