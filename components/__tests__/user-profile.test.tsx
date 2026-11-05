@@ -32,6 +32,11 @@ vi.mock('@/components/usage-budget-provider', () => ({
   })
 }))
 
+vi.mock('@/components/account-settings-dialog', () => ({
+  AccountSettingsDialog: ({ open }: { open: boolean }) =>
+    open ? <div role="dialog">Account settings</div> : null
+}))
+
 const user: AppUser = {
   id: 'user-1',
   email: 'person@example.com',
@@ -63,6 +68,20 @@ describe('UserProfile', () => {
     expect(screen.getByText('person@example.com')).toBeInTheDocument()
     expect(screen.queryByRole('menu')).not.toBeInTheDocument()
     expect(screen.queryByRole('menuitem')).not.toBeInTheDocument()
+  })
+
+  it('opens the account settings dialog when the profile row is tapped', () => {
+    render(
+      <AppUserProvider user={user} capabilities={capabilities}>
+        <UserProfile user={user} />
+      </AppUserProvider>
+    )
+
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Account settings' }))
+
+    expect(screen.getByRole('dialog')).toBeInTheDocument()
   })
 
   it('signs out through the auth server action and refreshes the router', async () => {
