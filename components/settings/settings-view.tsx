@@ -5,15 +5,10 @@ import Link from 'next/link'
 import {
   IconArrowLeft as ArrowLeft,
   IconCheck as Check,
-  IconCopy as Copy,
   IconDeviceLaptop as Laptop,
-  IconInfoCircle as Info,
-  IconLifebuoy as Lifebuoy,
-  IconMail as Mail,
   IconMoon as Moon,
   IconSun as Sun
 } from '@tabler/icons-react'
-import { toast } from 'sonner'
 
 import type { AppUser } from '@/lib/auth/types'
 import { useAuthCapabilities } from '@/lib/contexts/app-user-context'
@@ -23,8 +18,6 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 
 import { DeleteAccountButton } from '@/components/settings/delete-account-button'
 import { useTheme } from '@/components/theme-provider'
-
-import packageJson from '../../package.json'
 
 function getInitials(name: string, email: string | null | undefined): string {
   if (name && name !== 'User') {
@@ -46,23 +39,6 @@ const themeOptions = [
   { value: 'system', label: 'System', icon: Laptop }
 ]
 
-const HELP_LINKS = [
-  {
-    icon: Lifebuoy,
-    label: 'Help & support',
-    hint: 'Browse issues or ask a question',
-    href: 'https://github.com/BhagattJii/askwild/issues',
-    external: true
-  },
-  {
-    icon: Mail,
-    label: 'Send feedback',
-    hint: 'Tell us what to improve',
-    href: 'mailto:x.lakshayy@gmail.com',
-    external: false
-  }
-]
-
 interface SettingsViewProps {
   user: AppUser | null
 }
@@ -74,25 +50,6 @@ export function SettingsView({ user }: SettingsViewProps) {
 
   const userName = user?.name || 'User'
   const avatarUrl = user?.image ?? undefined
-  const memberSince = user?.createdAt
-    ? new Date(user.createdAt).toLocaleDateString('en-IN', {
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric'
-      })
-    : null
-
-  const copyEmail = async () => {
-    if (!user?.email) {
-      return
-    }
-    try {
-      await navigator.clipboard.writeText(user.email)
-      toast.success('Email copied')
-    } catch {
-      toast.error('Could not copy email')
-    }
-  }
 
   return (
     <div className="min-h-svh bg-background">
@@ -102,7 +59,7 @@ export function SettingsView({ user }: SettingsViewProps) {
           className="inline-flex items-center gap-2 text-sm text-muted-foreground transition-colors hover:text-foreground"
         >
           <ArrowLeft className="size-4" />
-          Back to Askwild
+          Askwild
         </Link>
 
         <h1 className="mt-4 text-2xl font-semibold tracking-tight">Settings</h1>
@@ -130,20 +87,9 @@ export function SettingsView({ user }: SettingsViewProps) {
                 <p className="truncate text-base font-medium leading-tight">
                   {userName}
                 </p>
-                <button
-                  type="button"
-                  onClick={copyEmail}
-                  aria-label="Copy email"
-                  className="group mt-1 inline-flex max-w-full items-center gap-1.5 rounded-md text-sm text-muted-foreground transition-colors hover:text-foreground"
-                >
-                  <span className="truncate">{user.email}</span>
-                  <Copy className="size-3.5 shrink-0 opacity-60 transition-opacity group-hover:opacity-100" />
-                </button>
-                {memberSince && (
-                  <p className="mt-1.5 text-xs text-muted-foreground">
-                    Member since {memberSince}
-                  </p>
-                )}
+                <p className="mt-1 truncate text-sm text-muted-foreground">
+                  {user.email}
+                </p>
               </div>
             </div>
           </section>
@@ -164,7 +110,11 @@ export function SettingsView({ user }: SettingsViewProps) {
           <p className="mt-0.5 text-xs text-muted-foreground">
             Choose how Askwild looks on this device.
           </p>
-          <div className="mt-3 divide-y rounded-xl border" role="radiogroup" aria-label="Theme">
+          <div
+            className="mt-3 divide-y rounded-xl border"
+            role="radiogroup"
+            aria-label="Appearance"
+          >
             {themeOptions.map(option => {
               const Icon = option.icon
               const selected = activeTheme === option.value
@@ -195,52 +145,6 @@ export function SettingsView({ user }: SettingsViewProps) {
                 </button>
               )
             })}
-          </div>
-        </section>
-
-        <section
-          id="help"
-          aria-labelledby="help-heading"
-          className="mt-6 scroll-mt-6 rounded-2xl border bg-card p-5 sm:p-6"
-        >
-          <p
-            id="help-heading"
-            className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground"
-          >
-            Help & about
-          </p>
-          <div className="mt-4 divide-y rounded-xl border">
-            {HELP_LINKS.map(link => {
-              const Icon = link.icon
-              return (
-                <a
-                  key={link.label}
-                  href={link.href}
-                  {...(link.external
-                    ? { target: '_blank', rel: 'noopener noreferrer' }
-                    : {})}
-                  className="flex w-full items-center gap-3 px-3 py-3 transition-colors hover:bg-accent/50 first:rounded-t-xl last:rounded-b-xl"
-                >
-                  <span className="flex size-9 items-center justify-center rounded-lg bg-muted/60">
-                    <Icon className="size-4" />
-                  </span>
-                  <span className="min-w-0 flex-1">
-                    <span className="block text-sm">{link.label}</span>
-                    <span className="mt-0.5 block text-xs text-muted-foreground">
-                      {link.hint}
-                    </span>
-                  </span>
-                </a>
-              )
-            })}
-            <div className="flex w-full items-center gap-3 px-3 py-3 first:rounded-t-xl last:rounded-b-xl">
-              <span className="flex size-9 items-center justify-center rounded-lg bg-muted/60">
-                <Info className="size-4" />
-              </span>
-              <span className="flex-1 text-sm text-muted-foreground">
-                Askwild v{packageJson.version}
-              </span>
-            </div>
           </div>
         </section>
 

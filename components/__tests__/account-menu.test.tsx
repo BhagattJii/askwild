@@ -61,20 +61,26 @@ describe('AccountMenu', () => {
     vi.clearAllMocks()
   })
 
-  it('shows the user name, email and a copy action', () => {
+  it('shows the user name, email and plain account links', () => {
     openMenu()
 
     expect(screen.getByText('Test Person')).toBeInTheDocument()
     expect(screen.getByText('person@example.com')).toBeInTheDocument()
     expect(
-      screen.getByRole('button', { name: 'Copy email' })
+      screen.getByRole('button', { name: /My Account/ })
     ).toBeInTheDocument()
+    expect(
+      screen.getByRole('button', { name: /Preferences/ })
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole('link', { name: /Help Center/ })
+    ).toHaveAttribute('href', 'https://github.com/BhagattJii/askwild/issues')
   })
 
   it('navigates to the settings sections', () => {
     openMenu()
 
-    fireEvent.click(screen.getByRole('button', { name: /Account/ }))
+    fireEvent.click(screen.getByRole('button', { name: /My Account/ }))
     expect(mockPush).toHaveBeenCalledWith('/settings#account')
 
     fireEvent.click(screen.getByRole('button', { name: 'Open profile' }))
@@ -82,8 +88,10 @@ describe('AccountMenu', () => {
     expect(mockPush).toHaveBeenCalledWith('/settings#preferences')
 
     fireEvent.click(screen.getByRole('button', { name: 'Open profile' }))
-    fireEvent.click(screen.getByRole('button', { name: /Help & about/ }))
-    expect(mockPush).toHaveBeenCalledWith('/settings#help')
+    fireEvent.click(screen.getByRole('link', { name: /Help Center/ }))
+    expect(
+      screen.getByRole('link', { name: /Help Center/ })
+    ).toHaveAttribute('target', '_blank')
   })
 
   it('asks for confirmation before signing out and signs out on confirm', async () => {
@@ -120,20 +128,4 @@ describe('AccountMenu', () => {
     ).not.toBeInTheDocument()
   })
 
-  it('routes the delete-account action to the settings danger zone', () => {
-    openMenu()
-
-    fireEvent.click(
-      screen.getByRole('button', { name: 'Delete account' })
-    )
-
-    expect(mockPush).toHaveBeenCalledWith('/settings#danger-zone')
-  })
-
-  it('hides the delete-account entry point when the provider lacks the capability', () => {
-    openMenu({ deleteUser: false })
-    expect(
-      screen.queryByRole('button', { name: 'Delete account' })
-    ).not.toBeInTheDocument()
-  })
 })

@@ -79,7 +79,7 @@ describe('SettingsView', () => {
     vi.clearAllMocks()
   })
 
-  it('shows the account section, appearance options and help links', () => {
+  it('shows the account section and appearance options', () => {
     renderSettings()
 
     expect(screen.getByText('Test Person')).toBeInTheDocument()
@@ -87,7 +87,6 @@ describe('SettingsView', () => {
     expect(
       screen.getByRole('radio', { name: 'Dark' })
     ).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: /Help & support/ })).toBeTruthy()
   })
 
   it('marks system as an appearance option and switches on click', () => {
