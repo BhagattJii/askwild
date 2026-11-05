@@ -470,6 +470,28 @@ SUPABASE_SECRET_KEY=[YOUR_SUPABASE_SECRET_KEY]
    reverse proxy in front of Askwild overwrites `X-Forwarded-For`; otherwise
    visitors can spoof it to dodge the limits.
 
+### Signed-in User Limits (cloud deployments)
+
+With `ASKWILD_CLOUD_DEPLOYMENT=true` and Upstash Redis configured, signed-in
+users are capped per UTC day after a per-IP guest cap:
+
+```bash
+OVERALL_CHAT_DAILY_LIMIT=100   # all chat searches per user (default 100)
+ADAPTIVE_CHAT_DAILY_LIMIT=30   # deep/adaptive searches per user (default 30)
+```
+
+The monthly usage budget (`MONTHLY_USAGE_ALLOWANCE`, default 100 credits,
+quick search costs 1, adaptive costs 2) runs in shadow mode unless
+`USAGE_BUDGET_ENFORCEMENT=on`. `USAGE_BUDGET_UI=on` shows the usage ring in
+the sidebar.
+
+**Admin exemption**: users with the `admin` role or any address listed in
+`ASKWILD_ADMIN_EMAILS` bypass every cap listed above, including the guest
+per-IP cap. The check runs server-side on the session, so client-side edits
+cannot claim the exemption. The Clerk provider is allowed under
+`ASKWILD_CLOUD_DEPLOYMENT`; the budget resolves users through the session
+the same way for both Supabase and Clerk.
+
 ## Guest Mode
 
 Guest mode allows users to try Askwild without creating an account. Guest sessions are ephemeral — no chat history is stored.
