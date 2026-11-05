@@ -18,8 +18,10 @@ vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: vi.fn(), refresh: vi.fn() })
 }))
 
-vi.mock('@/components/account-settings-dialog', () => ({
-  AccountSettingsDialog: () => null
+vi.mock('@/components/account-menu', () => ({
+  AccountMenu: ({ trigger }: { trigger: React.ReactNode }) => (
+    <>{trigger}</>
+  )
 }))
 
 vi.mock('@/components/external-link-items', () => ({

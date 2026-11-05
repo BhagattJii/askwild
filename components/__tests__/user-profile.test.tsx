@@ -1,18 +1,12 @@
 import React from 'react'
 
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { render, screen } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { signOut } from '@/lib/actions/auth'
 import type { AppUser } from '@/lib/auth/types'
-import { chatStore } from '@/lib/chat-store'
 import { AppUserProvider } from '@/lib/contexts/app-user-context'
 
 import UserProfile from '@/components/user-profile'
-
-vi.mock('@/lib/actions/auth', () => ({
-  signOut: vi.fn()
-}))
 
 const { mockPush, mockRefresh } = vi.hoisted(() => ({
   mockPush: vi.fn(),
@@ -32,9 +26,10 @@ vi.mock('@/components/usage-budget-provider', () => ({
   })
 }))
 
-vi.mock('@/components/account-settings-dialog', () => ({
-  AccountSettingsDialog: ({ open }: { open: boolean }) =>
-    open ? <div role="dialog">Account settings</div> : null
+vi.mock('@/components/account-menu', () => ({
+  AccountMenu: ({ trigger }: { trigger: React.ReactNode }) => (
+    <div data-testid="account-menu">{trigger}</div>
+  )
 }))
 
 const user: AppUser = {
@@ -57,7 +52,7 @@ describe('UserProfile', () => {
     vi.clearAllMocks()
   })
 
-  it('shows the user profile information without a link menu', () => {
+  it('shows the user profile information with an account menu trigger', () => {
     render(
       <AppUserProvider user={user} capabilities={capabilities}>
         <UserProfile user={user} />
@@ -66,41 +61,9 @@ describe('UserProfile', () => {
 
     expect(screen.getByText('Test Person')).toBeInTheDocument()
     expect(screen.getByText('person@example.com')).toBeInTheDocument()
-    expect(screen.queryByRole('menu')).not.toBeInTheDocument()
-    expect(screen.queryByRole('menuitem')).not.toBeInTheDocument()
-  })
-
-  it('opens the account settings dialog when the profile row is tapped', () => {
-    render(
-      <AppUserProvider user={user} capabilities={capabilities}>
-        <UserProfile user={user} />
-      </AppUserProvider>
-    )
-
-    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
-
-    fireEvent.click(screen.getByRole('button', { name: 'Account settings' }))
-
-    expect(screen.getByRole('dialog')).toBeInTheDocument()
-  })
-
-  it('signs out through the auth server action and refreshes the router', async () => {
-    vi.mocked(signOut).mockResolvedValue({ success: true })
-    render(
-      <AppUserProvider user={user} capabilities={capabilities}>
-        <UserProfile user={user} />
-      </AppUserProvider>
-    )
-
-    chatStore.getOrCreate('cached', { messages: [] })
-
-    fireEvent.click(screen.getByRole('button', { name: 'Sign out' }))
-
-    await waitFor(() => {
-      expect(signOut).toHaveBeenCalledTimes(1)
-      expect(chatStore.get('cached')).toBeUndefined()
-      expect(mockPush).toHaveBeenCalledWith('/')
-      expect(mockRefresh).toHaveBeenCalled()
-    })
+    expect(screen.getByTestId('account-menu')).toBeInTheDocument()
+    expect(
+      screen.getByRole('button', { name: 'Account settings' })
+    ).toBeInTheDocument()
   })
 })
