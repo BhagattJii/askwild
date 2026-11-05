@@ -1,5 +1,6 @@
 'use client'
 
+import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 
 import { IconLogout as LogOut } from '@tabler/icons-react'
@@ -13,6 +14,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { useUsageBudget } from '@/components/usage-budget-provider'
 
 import { Button } from './ui/button'
+import { AccountSettingsDialog } from './account-settings-dialog'
 
 interface UserProfileProps {
   user: AppUser
@@ -34,6 +36,7 @@ function getInitials(name: string, email: string | null | undefined): string {
 
 export default function UserProfile({ user }: UserProfileProps) {
   const router = useRouter()
+  const [accountOpen, setAccountOpen] = useState(false)
   const { usage, isLow } = useUsageBudget()
   const userName = user.name || 'User'
   const avatarUrl = user.image ?? undefined
@@ -46,38 +49,45 @@ export default function UserProfile({ user }: UserProfileProps) {
   }
 
   return (
-    <div className="flex items-center gap-3 px-2 py-1.5">
-      <div className="relative shrink-0">
-        <Avatar className="size-8">
-          <AvatarImage src={avatarUrl} alt={userName} />
-          <AvatarFallback>{getInitials(userName, user.email)}</AvatarFallback>
-        </Avatar>
-        {isLow && (
-          <span
-            className="absolute -right-0.5 -top-0.5 size-2 rounded-full bg-destructive ring-2 ring-background"
-            aria-hidden="true"
-            data-testid="usage-status-dot"
-          />
-        )}
-      </div>
+    <div className="flex items-center gap-1 px-2 py-1.5">
+      <Button
+        variant="ghost"
+        className="h-auto min-w-0 flex-1 justify-start gap-3 p-1"
+        aria-label="Account settings"
+        onClick={() => setAccountOpen(true)}
+      >
+        <div className="relative shrink-0">
+          <Avatar className="size-8">
+            <AvatarImage src={avatarUrl} alt={userName} />
+            <AvatarFallback>{getInitials(userName, user.email)}</AvatarFallback>
+          </Avatar>
+          {isLow && (
+            <span
+              className="absolute -right-0.5 -top-0.5 size-2 rounded-full bg-destructive ring-2 ring-background"
+              aria-hidden="true"
+              data-testid="usage-status-dot"
+            />
+          )}
+        </div>
 
-      <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-        <p className="truncate text-sm font-medium leading-none">{userName}</p>
-        <p className="truncate text-xs leading-none text-muted-foreground">
-          {user.email}
-        </p>
-        {usage && (
-          <p
-            className={
-              isLow
-                ? 'text-xs leading-none text-destructive tabular-nums'
-                : 'text-xs leading-none text-muted-foreground tabular-nums'
-            }
-          >
-            {usage.remaining} / {usage.limit}
+        <div className="flex min-w-0 flex-1 flex-col gap-0.5 text-left">
+          <p className="truncate text-sm font-medium leading-none">{userName}</p>
+          <p className="truncate text-xs leading-none text-muted-foreground">
+            {user.email}
           </p>
-        )}
-      </div>
+          {usage && (
+            <p
+              className={
+                isLow
+                  ? 'text-xs leading-none text-destructive tabular-nums'
+                  : 'text-xs leading-none text-muted-foreground tabular-nums'
+              }
+            >
+              {usage.remaining} / {usage.limit}
+            </p>
+          )}
+        </div>
+      </Button>
 
       <Button
         variant="ghost"
@@ -88,6 +98,12 @@ export default function UserProfile({ user }: UserProfileProps) {
       >
         <LogOut className="size-4" />
       </Button>
+
+      <AccountSettingsDialog
+        open={accountOpen}
+        onOpenChange={setAccountOpen}
+        user={user}
+      />
     </div>
   )
 }

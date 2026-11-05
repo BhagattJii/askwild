@@ -1,0 +1,29 @@
+name: Keep SearXNG warm
+
+on:
+  schedule:
+    # Render free services sleep after 15 minutes idle; ping slightly
+    # under that so the instance stays hot for real traffic.
+    - cron: '*/14 * * * *'
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: keep-searxng-warm
+  cancel-in-progress: false
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Ping SearXNG
+        continue-on-error: true
+        run: |
+          code=$(curl -sS -o /dev/null -m 90 -w '%{http_code}' \
+            'https://hawkin-searx.onrender.com/')
+          echo "status=$code"
+          if [ "$code" != "200" ]; then
+            echo "::warning::SearXNG responded with HTTP $code"
+          fi
