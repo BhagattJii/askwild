@@ -12,9 +12,12 @@ import { isAnonymousMode } from '@/lib/auth/provider'
 import { getUserMessageIds } from '@/lib/db/actions'
 import { generateId } from '@/lib/db/schema'
 import { checkAndEnforceAdaptiveLimit } from '@/lib/rate-limit/adaptive-limit'
+import {
+  checkAndEnforceAiTimeLimit,
+  withAiTimeTracking
+} from '@/lib/rate-limit/ai-time-limit'
 import { checkAndEnforceOverallChatLimit } from '@/lib/rate-limit/chat-limits'
 import { checkAndEnforceGuestLimit } from '@/lib/rate-limit/guest-limit'
-import { parseAdminEmails } from '@/lib/version/admins'
 import {
   ADAPTIVE_MODE_AUTH_REQUIRED_MESSAGE,
   isAdaptiveModeAuthBlocked
@@ -43,6 +46,7 @@ import { selectModel } from '@/lib/utils/model-selection'
 import { perfLog, perfTime } from '@/lib/utils/perf-logging'
 import { resetAllCounters } from '@/lib/utils/perf-tracking'
 import { isProviderEnabled } from '@/lib/utils/registry'
+import { parseAdminEmails } from '@/lib/version/admins'
 
 export const maxDuration = 300
 
@@ -244,6 +248,11 @@ export async function POST(req: Request) {
     if (!isGuest && !isAdminViewer) {
       const overallLimitResponse = await checkAndEnforceOverallChatLimit(userId)
       if (overallLimitResponse) return overallLimitResponse
+
+      // Daily budget of active AI time: only the seconds the model spends
+      // working count, not the time the user spends reading or thinking.
+      const aiTimeLimitResponse = await checkAndEnforceAiTimeLimit(userId)
+      if (aiTimeLimitResponse) return aiTimeLimitResponse
 
       if (searchMode === 'adaptive') {
         const adaptiveLimitResponse = await checkAndEnforceAdaptiveLimit(userId)
@@ -471,6 +480,13 @@ export async function POST(req: Request) {
       }
 
       if (!response.ok) await refundUsageOnce?.()
+    }
+
+    // Charge the seconds the model spends working on this turn to the
+    // user's daily active-time budget. Admin and allowlisted accounts are
+    // exempt, and guests stay on their per-IP request cap.
+    if (!isGuest && !isAdminViewer && userId) {
+      response = withAiTimeTracking(response, userId)
     }
 
     perfTime('createChatStreamResponse resolved', streamStart)
