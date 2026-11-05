@@ -1,5 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // Hide the framework version leak on every response.
+  poweredByHeader: false,
   skipTrailingSlashRedirect: true,
   experimental: {
     staleTimes: { dynamic: 300 }
@@ -24,6 +26,13 @@ const nextConfig = {
         key: 'Permissions-Policy',
         value:
           'camera=(), microphone=(), geolocation=(), payment=(), usb=(), interest-cohort=()'
+      },
+      {
+        // Explicitly pin the browser default so every response carries a
+        // definite policy even if a proxy strips or downgrades requests.
+        // /auth continues to override with no-referrer below.
+        key: 'Referrer-Policy',
+        value: 'strict-origin-when-cross-origin'
       }
     ]
 
