@@ -1,7 +1,6 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { deleteAccount } from '@/lib/actions/account'
 import { signOut } from '@/lib/actions/auth'
 import type { AppUser } from '@/lib/auth/types'
 import { chatStore } from '@/lib/chat-store'
@@ -9,22 +8,12 @@ import { AppUserProvider } from '@/lib/contexts/app-user-context'
 
 import { AccountMenu } from '@/components/account-menu'
 
-vi.mock('@/lib/actions/account', () => ({
-  deleteAccount: vi.fn()
-}))
-
 vi.mock('@/lib/actions/auth', () => ({
   signOut: vi.fn()
 }))
 
 vi.mock('sonner', () => ({
   toast: { success: vi.fn(), error: vi.fn() }
-}))
-
-const setThemeMock = vi.hoisted(() => vi.fn())
-
-vi.mock('@/components/theme-provider', () => ({
-  useTheme: () => ({ theme: 'dark', setTheme: setThemeMock })
 }))
 
 const { mockPush, mockRefresh } = vi.hoisted(() => ({
@@ -82,11 +71,19 @@ describe('AccountMenu', () => {
     ).toBeInTheDocument()
   })
 
-  it('switches the theme from the appearance selector', () => {
+  it('navigates to the settings sections', () => {
     openMenu()
 
-    fireEvent.click(screen.getByRole('button', { name: 'Light' }))
-    expect(setThemeMock).toHaveBeenCalledWith('light')
+    fireEvent.click(screen.getByRole('button', { name: /Account/ }))
+    expect(mockPush).toHaveBeenCalledWith('/settings#account')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open profile' }))
+    fireEvent.click(screen.getByRole('button', { name: /Preferences/ }))
+    expect(mockPush).toHaveBeenCalledWith('/settings#preferences')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open profile' }))
+    fireEvent.click(screen.getByRole('button', { name: /Help & about/ }))
+    expect(mockPush).toHaveBeenCalledWith('/settings#help')
   })
 
   it('asks for confirmation before signing out and signs out on confirm', async () => {
@@ -123,11 +120,14 @@ describe('AccountMenu', () => {
     ).not.toBeInTheDocument()
   })
 
-  it('shows the delete-account entry point when the provider supports it', () => {
+  it('routes the delete-account action to the settings danger zone', () => {
     openMenu()
-    expect(
+
+    fireEvent.click(
       screen.getByRole('button', { name: 'Delete account' })
-    ).toBeInTheDocument()
+    )
+
+    expect(mockPush).toHaveBeenCalledWith('/settings#danger-zone')
   })
 
   it('hides the delete-account entry point when the provider lacks the capability', () => {
@@ -135,44 +135,5 @@ describe('AccountMenu', () => {
     expect(
       screen.queryByRole('button', { name: 'Delete account' })
     ).not.toBeInTheDocument()
-  })
-
-  it('deletes the account and clears the session', async () => {
-    vi.mocked(deleteAccount).mockResolvedValue({ success: true })
-    vi.mocked(signOut).mockResolvedValue({ success: true })
-    openMenu()
-
-    chatStore.getOrCreate('cached', { messages: [] })
-
-    fireEvent.click(screen.getByRole('button', { name: 'Delete account' }))
-    fireEvent.click(
-      screen.getAllByRole('button', { name: 'Delete account' }).at(-1)!
-    )
-
-    await waitFor(() => {
-      expect(deleteAccount).toHaveBeenCalledTimes(1)
-      expect(signOut).toHaveBeenCalledTimes(1)
-      expect(chatStore.get('cached')).toBeUndefined()
-      expect(mockPush).toHaveBeenCalledWith('/')
-      expect(mockRefresh).toHaveBeenCalled()
-    })
-  })
-
-  it('surfaces deletion errors', async () => {
-    vi.mocked(deleteAccount).mockResolvedValue({
-      success: false,
-      error: 'Account deletion is unavailable in anonymous mode.'
-    })
-    openMenu()
-
-    fireEvent.click(screen.getByRole('button', { name: 'Delete account' }))
-    fireEvent.click(
-      screen.getAllByRole('button', { name: 'Delete account' }).at(-1)!
-    )
-
-    await waitFor(() => {
-      expect(deleteAccount).toHaveBeenCalledTimes(1)
-      expect(signOut).not.toHaveBeenCalled()
-    })
   })
 })

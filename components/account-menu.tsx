@@ -4,22 +4,20 @@ import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 
 import {
-  IconCheck as Check,
+  IconChevronRight as ChevronRight,
   IconCopy as Copy,
-  IconDeviceLaptop as Laptop,
+  IconLifebuoy as Lifebuoy,
   IconLogout as LogOut,
-  IconMoon as Moon,
-  IconSun as Sun,
-  IconTrash as Trash2
+  IconPalette as Palette,
+  IconTrash as Trash2,
+  IconUser as User
 } from '@tabler/icons-react'
 import { toast } from 'sonner'
 
-import { deleteAccount } from '@/lib/actions/account'
 import { signOut } from '@/lib/actions/auth'
 import type { AppUser } from '@/lib/auth/types'
 import { chatStore } from '@/lib/chat-store'
 import { useAuthCapabilities } from '@/lib/contexts/app-user-context'
-import { cn } from '@/lib/utils'
 
 import {
   AlertDialog,
@@ -40,8 +38,6 @@ import {
 import { Separator } from '@/components/ui/separator'
 import { Spinner } from '@/components/ui/spinner'
 
-import { useTheme } from '@/components/theme-provider'
-
 function getInitials(name: string, email: string | null | undefined): string {
   if (name && name !== 'User') {
     const names = name.split(' ')
@@ -56,32 +52,26 @@ function getInitials(name: string, email: string | null | undefined): string {
   return 'U'
 }
 
-const themeOptions = [
-  { value: 'light', label: 'Light', icon: Sun },
-  { value: 'dark', label: 'Dark', icon: Moon },
-  { value: 'system', label: 'System', icon: Laptop }
+const settingsLinks = [
+  { icon: User, label: 'Account', hint: 'Profile and email', href: '/settings#account' },
+  { icon: Palette, label: 'Preferences', hint: 'Appearance and display', href: '/settings#preferences' },
+  { icon: Lifebuoy, label: 'Help & about', hint: 'Support, feedback, version', href: '/settings#help' }
 ]
 
 interface AccountMenuProps {
   user: AppUser
   trigger: React.ReactNode
-  onNavigate?: () => void
 }
 
-export function AccountMenu({ user, trigger, onNavigate }: AccountMenuProps) {
+export function AccountMenu({ user, trigger }: AccountMenuProps) {
   const router = useRouter()
-  const { setTheme, theme } = useTheme()
   const capabilities = useAuthCapabilities()
   const [isPopoverOpen, setIsPopoverOpen] = useState(false)
   const [confirmSignOut, setConfirmSignOut] = useState(false)
-  const [confirmDelete, setConfirmDelete] = useState(false)
   const [isSigningOut, startSignOutTransition] = useTransition()
-  const [isDeleting, startDeleteTransition] = useTransition()
-  const activeTheme = theme ?? 'system'
 
   const userName = user.name || 'User'
   const avatarUrl = user.image ?? undefined
-  const isBusy = isSigningOut || isDeleting
 
   const copyEmail = async () => {
     if (!user.email) {
@@ -95,6 +85,11 @@ export function AccountMenu({ user, trigger, onNavigate }: AccountMenuProps) {
     }
   }
 
+  const go = (href: string) => {
+    setIsPopoverOpen(false)
+    router.push(href)
+  }
+
   const signOutAndLeave = async () => {
     try {
       await signOut()
@@ -104,7 +99,6 @@ export function AccountMenu({ user, trigger, onNavigate }: AccountMenuProps) {
     chatStore.setUser(null)
     setConfirmSignOut(false)
     setIsPopoverOpen(false)
-    onNavigate?.()
     router.push('/')
     router.refresh()
   }
@@ -113,37 +107,12 @@ export function AccountMenu({ user, trigger, onNavigate }: AccountMenuProps) {
     startSignOutTransition(signOutAndLeave)
   }
 
-  const handleDeleteAccount = () => {
-    startDeleteTransition(async () => {
-      const result = await deleteAccount()
-
-      if (result.success) {
-        chatStore.setUser(null)
-        try {
-          await signOut()
-        } catch (error) {
-          console.error('Failed to clear client session:', error)
-        }
-
-        toast.success('Account deleted')
-        setConfirmDelete(false)
-        setIsPopoverOpen(false)
-        onNavigate?.()
-        router.push('/')
-        router.refresh()
-        return
-      }
-
-      toast.error(result.error ?? 'Failed to delete account')
-    })
-  }
-
   return (
     <>
       <Popover
         open={isPopoverOpen}
         onOpenChange={nextOpen => {
-          if (!isBusy) {
+          if (!isSigningOut) {
             setIsPopoverOpen(nextOpen)
           }
         }}
@@ -153,9 +122,9 @@ export function AccountMenu({ user, trigger, onNavigate }: AccountMenuProps) {
           side="top"
           align="start"
           sideOffset={8}
-          className="w-72 rounded-2xl p-3 shadow-xl"
+          className="w-64 rounded-2xl p-2 shadow-xl"
         >
-          <div className="flex items-center gap-3 p-2">
+          <div className="flex items-center gap-3 rounded-xl px-2 py-2">
             <Avatar className="size-11 shrink-0">
               <AvatarImage src={avatarUrl} alt={userName} />
               <AvatarFallback className="text-sm font-medium">
@@ -184,50 +153,27 @@ export function AccountMenu({ user, trigger, onNavigate }: AccountMenuProps) {
             </div>
           </div>
 
-          <Separator className="my-2" />
+          <Separator className="my-1.5" />
 
-          <div className="px-2 pb-1.5">
-            <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-              Appearance
-            </p>
-          </div>
-          <div
-            className="grid grid-cols-3 gap-1 rounded-xl bg-muted/60 p-1"
-            role="group"
-            aria-label="Theme"
-          >
-            {themeOptions.map(option => {
-              const Icon = option.icon
-              const selected = activeTheme === option.value
+          {settingsLinks.map(link => {
+            const Icon = link.icon
+            return (
+              <button
+                key={link.label}
+                type="button"
+                onClick={() => go(link.href)}
+                className="flex w-full items-center gap-2.5 rounded-lg px-2 py-2 text-sm transition-colors hover:bg-accent hover:text-accent-foreground"
+              >
+                <Icon className="size-4 text-muted-foreground" />
+                <span className="min-w-0 flex-1 truncate text-left">
+                  {link.label}
+                </span>
+                <ChevronRight className="size-4 text-muted-foreground" />
+              </button>
+            )
+          })}
 
-              return (
-                <button
-                  key={option.value}
-                  type="button"
-                  aria-pressed={selected}
-                  onClick={() => setTheme(option.value)}
-                  className={cn(
-                    'flex flex-col items-center gap-1 rounded-lg px-2 py-2 text-[11px] font-medium text-muted-foreground transition-all hover:text-foreground',
-                    selected &&
-                      'bg-background text-foreground shadow-sm ring-1 ring-border'
-                  )}
-                >
-                  <span className="relative flex items-center">
-                    <Icon className="size-4" />
-                    {selected && (
-                      <Check
-                        aria-hidden="true"
-                        className="absolute -right-4 top-0 size-3 text-foreground"
-                      />
-                    )}
-                  </span>
-                  {option.label}
-                </button>
-              )
-            })}
-          </div>
-
-          <Separator className="my-2" />
+          <Separator className="my-1.5" />
 
           <button
             type="button"
@@ -241,7 +187,7 @@ export function AccountMenu({ user, trigger, onNavigate }: AccountMenuProps) {
           {capabilities.deleteUser && (
             <button
               type="button"
-              onClick={() => setConfirmDelete(true)}
+              onClick={() => go('/settings#danger-zone')}
               className="flex w-full items-center gap-2.5 rounded-lg px-2 py-2 text-sm text-destructive transition-colors hover:bg-destructive/10"
             >
               <Trash2 className="size-4" />
@@ -277,38 +223,6 @@ export function AccountMenu({ user, trigger, onNavigate }: AccountMenuProps) {
               }}
             >
               {isSigningOut ? <Spinner /> : 'Sign out'}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
-      <AlertDialog
-        open={confirmDelete}
-        onOpenChange={nextOpen => {
-          if (!isDeleting) {
-            setConfirmDelete(nextOpen)
-          }
-        }}
-      >
-        <AlertDialogContent className="max-w-md">
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete your account?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This action cannot be undone. Your account, chat history, and
-              uploaded files will be permanently deleted.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              disabled={isDeleting}
-              onClick={event => {
-                event.preventDefault()
-                handleDeleteAccount()
-              }}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-            >
-              {isDeleting ? <Spinner /> : 'Delete account'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
