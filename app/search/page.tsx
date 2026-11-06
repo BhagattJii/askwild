@@ -21,7 +21,7 @@ export default async function SearchPage(props: {
   const userId = await getCurrentUserId()
   const isCloudDeployment = process.env.ASKWILD_CLOUD_DEPLOYMENT === 'true'
   const libraryAvailable = !isAnonymousMode()
-  const modelSelectorData = await getModelSelectorData()
+  const modelSelectorData = await getModelSelectorData({ isGuest: !userId })
 
   return (
     <Chat

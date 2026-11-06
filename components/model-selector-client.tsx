@@ -6,13 +6,15 @@ import { useRouter } from 'next/navigation'
 
 import {
   IconCheck as Check,
-  IconChevronDown as ChevronDown
+  IconChevronDown as ChevronDown,
+  IconLock as Lock
 } from '@tabler/icons-react'
 
 import {
   MODEL_SELECTION_COOKIE,
   serializeModelSelectionCookie
 } from '@/lib/config/model-selection-cookie'
+import { useAppUser } from '@/lib/contexts/app-user-context'
 import { ModelSelectorData } from '@/lib/types/model-selector'
 import { Model } from '@/lib/types/models'
 import { cn } from '@/lib/utils'
@@ -61,10 +63,17 @@ function ProviderLogo({ providerId }: { providerId: string }) {
 
 interface ModelSelectorClientProps {
   data: ModelSelectorData
+  /** Called when a guest clicks a locked model (opens the sign-in prompt). */
+  onLockedModelClick?: () => void
 }
 
-export function ModelSelectorClient({ data }: ModelSelectorClientProps) {
+export function ModelSelectorClient({
+  data,
+  onLockedModelClick
+}: ModelSelectorClientProps) {
   const router = useRouter()
+  const user = useAppUser()
+  const isGuest = !user
   const [open, setOpen] = useState(false)
   const [selectedModelKey, setSelectedModelKey] = useState<string>(
     data.selectedModelKey
@@ -92,6 +101,11 @@ export function ModelSelectorClient({ data }: ModelSelectorClientProps) {
   )
 
   const selectedModel = selectableByKey[selectedModelKey]
+
+  const lockedKeys = new Set(data.guestLockedKeys ?? [])
+  const lockedModelsCount = isGuest
+    ? selectableModels.filter(model => lockedKeys.has(modelKey(model))).length
+    : 0
 
   if (!data.enabled) {
     return null
@@ -152,11 +166,23 @@ export function ModelSelectorClient({ data }: ModelSelectorClientProps) {
                 {models.map(model => {
                   const value = modelKey(model)
                   const isSelected = selectedModelKey === value
+                  const isLocked = isGuest && lockedKeys.has(value)
                   return (
                     <CommandItem
                       key={value}
                       value={`${value} ${model.name} ${provider}`}
+                      aria-label={
+                        isLocked
+                          ? `${model.name} (sign in to unlock)`
+                          : model.name
+                      }
                       onSelect={() => {
+                        if (isLocked) {
+                          setOpen(false)
+                          onLockedModelClick?.()
+                          return
+                        }
+
                         const nextModel = selectableByKey[value]
                         if (!nextModel) {
                           return
@@ -173,7 +199,10 @@ export function ModelSelectorClient({ data }: ModelSelectorClientProps) {
                         setOpen(false)
                         router.refresh()
                       }}
-                      className="cursor-pointer"
+                      className={cn(
+                        'cursor-pointer',
+                        isLocked && 'opacity-80'
+                      )}
                     >
                       <Check
                         className={cn(
@@ -182,12 +211,35 @@ export function ModelSelectorClient({ data }: ModelSelectorClientProps) {
                         )}
                       />
                       <ProviderLogo providerId={model.providerId} />
-                      <span className="truncate">{model.name}</span>
+                      <span className="flex-1 truncate">{model.name}</span>
+                      {isLocked && (
+                        <Lock
+                          aria-label="Locked — sign in to unlock"
+                          className="h-4 w-4 shrink-0 text-muted-foreground"
+                        />
+                      )}
                     </CommandItem>
                   )
                 })}
               </CommandGroup>
             ))}
+            {lockedModelsCount > 0 && (
+              <div className="border-t px-3 py-2 text-[11px] leading-relaxed text-muted-foreground">
+                You&apos;re using the free model.{' '}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setOpen(false)
+                    onLockedModelClick?.()
+                  }}
+                  className="font-medium text-foreground underline-offset-2 hover:underline"
+                >
+                  Sign in
+                </button>{' '}
+                to unlock {lockedModelsCount} larger{' '}
+                {lockedModelsCount === 1 ? 'model' : 'models'}.
+              </div>
+            )}
           </CommandList>
         </Command>
       </PopoverContent>

@@ -929,8 +929,11 @@ export function ChatPanel({
               />
             </div>
             <div className="flex items-center gap-2">
-              {!isCloudDeployment && modelSelectorData && (
-                <ModelSelectorClient data={modelSelectorData} />
+              {modelSelectorData && modelSelectorData.enabled && (
+                <ModelSelectorClient
+                  data={modelSelectorData}
+                  onLockedModelClick={onAdaptiveModeAuthRequired}
+                />
               )}
               {messages.length > 0 && (
                 <Button
