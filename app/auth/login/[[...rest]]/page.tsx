@@ -1,4 +1,4 @@
-import { SignIn } from '@clerk/nextjs'
+import { ClerkProvider, SignIn } from '@clerk/nextjs'
 
 import { getAuthProvider } from '@/lib/auth/provider'
 
@@ -16,15 +16,17 @@ export default async function Page(props: {
 
   if (provider.name === 'clerk') {
     return (
-      <div className="flex min-h-svh w-full items-center justify-center p-6 md:p-10">
-        <div className="w-full max-w-sm">
-          <SignIn
-            forceRedirectUrl={next ?? '/'}
-            fallbackRedirectUrl="/"
-            signUpForceRedirectUrl={next ?? '/'}
-          />
+      <ClerkProvider dynamic signInUrl="/auth/login" signUpUrl="/auth/login">
+        <div className="flex min-h-svh w-full items-center justify-center p-6 md:p-10">
+          <div className="w-full max-w-sm">
+            <SignIn
+              forceRedirectUrl={next ?? '/'}
+              fallbackRedirectUrl="/"
+              signUpForceRedirectUrl={next ?? '/'}
+            />
+          </div>
         </div>
-      </div>
+      </ClerkProvider>
     )
   }
 

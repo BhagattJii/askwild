@@ -4,7 +4,8 @@ const nextConfig = {
   poweredByHeader: false,
   skipTrailingSlashRedirect: true,
   experimental: {
-    staleTimes: { dynamic: 300 }
+    staleTimes: { dynamic: 300 },
+    optimizePackageImports: ['@tabler/icons-react']
   },
   async headers() {
     const hardenedHeaders = [
@@ -25,7 +26,7 @@ const nextConfig = {
       {
         key: 'Permissions-Policy',
         value:
-          'camera=(), microphone=(), geolocation=(), payment=(), usb=(), interest-cohort=()'
+          'camera=(), microphone=(self), geolocation=(), payment=(), usb=(), interest-cohort=()'
       },
       {
         // Explicitly pin the browser default so every response carries a
