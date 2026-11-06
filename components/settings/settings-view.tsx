@@ -2,22 +2,17 @@
 
 import Link from 'next/link'
 
-import {
-  IconArrowLeft as ArrowLeft,
-  IconCheck as Check,
-  IconDeviceLaptop as Laptop,
-  IconMoon as Moon,
-  IconSun as Sun
-} from '@tabler/icons-react'
+import { IconArrowLeft as ArrowLeft } from '@tabler/icons-react'
 
 import type { AppUser } from '@/lib/auth/types'
 import { useAuthCapabilities } from '@/lib/contexts/app-user-context'
+import type { Preferences } from '@/lib/preferences/shared'
 import { cn } from '@/lib/utils'
 
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 
 import { DeleteAccountButton } from '@/components/settings/delete-account-button'
-import { useTheme } from '@/components/theme-provider'
+import { PreferencesEditor } from '@/components/settings/preferences-editor'
 
 function getInitials(name: string, email: string | null | undefined): string {
   if (name && name !== 'User') {
@@ -33,21 +28,16 @@ function getInitials(name: string, email: string | null | undefined): string {
   return 'U'
 }
 
-const themeOptions = [
-  { value: 'light', label: 'Light', icon: Sun },
-  { value: 'dark', label: 'Dark', icon: Moon },
-  { value: 'system', label: 'System', icon: Laptop }
-]
-
 interface SettingsViewProps {
   user: AppUser | null
+  initialPreferences: Preferences
 }
 
-export function SettingsView({ user }: SettingsViewProps) {
-  const { setTheme, theme } = useTheme()
+export function SettingsView({
+  user,
+  initialPreferences
+}: SettingsViewProps) {
   const capabilities = useAuthCapabilities()
-  const activeTheme = theme ?? 'system'
-
   const userName = user?.name || 'User'
   const avatarUrl = user?.image ?? undefined
 
@@ -95,58 +85,23 @@ export function SettingsView({ user }: SettingsViewProps) {
           </section>
         )}
 
-        <section
-          id="preferences"
-          aria-labelledby="preferences-heading"
-          className="mt-6 scroll-mt-6 rounded-2xl border bg-card p-5 sm:p-6"
-        >
-          <p
-            id="preferences-heading"
-            className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground"
-          >
-            Preferences
-          </p>
-          <p className="mt-4 text-sm font-medium">Appearance</p>
-          <p className="mt-0.5 text-xs text-muted-foreground">
-            Choose how Askwild looks on this device.
-          </p>
-          <div
-            className="mt-3 divide-y rounded-xl border"
-            role="radiogroup"
-            aria-label="Appearance"
-          >
-            {themeOptions.map(option => {
-              const Icon = option.icon
-              const selected = activeTheme === option.value
 
-              return (
-                <button
-                  key={option.value}
-                  type="button"
-                  role="radio"
-                  aria-checked={selected}
-                  onClick={() => setTheme(option.value)}
-                  className="flex w-full items-center gap-3 px-3 py-3 text-left transition-colors hover:bg-accent/50 first:rounded-t-xl last:rounded-b-xl"
-                >
-                  <span className="flex size-9 items-center justify-center rounded-lg bg-muted/60">
-                    <Icon className="size-4" />
-                  </span>
-                  <span className="flex-1 text-sm">{option.label}</span>
-                  <span
-                    className={cn(
-                      'flex size-5 items-center justify-center rounded-full border transition-colors',
-                      selected
-                        ? 'border-primary bg-primary text-primary-foreground'
-                        : 'border-muted-foreground/30 text-transparent'
-                    )}
-                  >
-                    <Check className="size-3" />
-                  </span>
-                </button>
-              )
-            })}
-          </div>
-        </section>
+        {user ? (
+          <PreferencesEditor initial={initialPreferences} />
+        ) : (
+          <section className="mt-6 rounded-2xl border bg-card p-5 sm:p-6">
+            <p className="text-sm font-medium">Preferences</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Sign in to choose how Askwild answers you.
+            </p>
+            <Link
+              href="/auth/login"
+              className="mt-3 inline-flex h-9 items-center gap-2 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+            >
+              Sign in
+            </Link>
+          </section>
+        )}
 
         {user && capabilities.deleteUser && (
           <section

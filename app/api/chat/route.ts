@@ -1,6 +1,7 @@
 import { cookies } from 'next/headers'
 import { after } from 'next/server'
 
+import { getPreferencesByUserId } from '@/lib/actions/preferences'
 import {
   calculateConversationTurn,
   calculateConversationTurnFromIds,
@@ -172,6 +173,11 @@ export async function POST(req: Request) {
       const guestLimitResponse = await checkAndEnforceGuestLimit(ip)
       if (guestLimitResponse) return guestLimitResponse
     }
+
+    // Per-user AI preferences fold into the system prompt (language, bio,
+    // related-questions toggle). Signed-in users only; fails open to defaults.
+    const userPreferences =
+      !isGuest && userId ? await getPreferencesByUserId(userId) : undefined
 
     const usageBudgetAvailable =
       !isGuest && !isAdminViewer && isUsageBudgetAvailable()
@@ -472,7 +478,8 @@ export async function POST(req: Request) {
           abortSignal,
           isNewChat,
           searchMode,
-          onZeroPartError: refundUsageOnce
+          onZeroPartError: refundUsageOnce,
+          userPreferences
         })
       } catch (error) {
         await refundUsageOnce?.()

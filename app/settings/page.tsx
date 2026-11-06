@@ -1,6 +1,8 @@
 import type { Metadata } from 'next'
 
+import { getPreferencesByUserId } from '@/lib/actions/preferences'
 import { getCurrentUser } from '@/lib/auth/get-current-user'
+import { DEFAULT_PREFERENCES } from '@/lib/preferences/shared'
 
 import { SettingsView } from '@/components/settings/settings-view'
 
@@ -14,5 +16,8 @@ export const metadata: Metadata = {
 
 export default async function SettingsPage() {
   const user = await getCurrentUser()
-  return <SettingsView user={user} />
+  const initialPreferences = user?.id
+    ? await getPreferencesByUserId(user.id)
+    : DEFAULT_PREFERENCES
+  return <SettingsView user={user} initialPreferences={initialPreferences} />
 }

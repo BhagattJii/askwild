@@ -21,7 +21,13 @@ vi.mock('@/lib/auth/provider', () => ({
   isAnonymousMode: vi.fn(() => false)
 }))
 vi.mock('@/lib/db/actions', () => ({ getUserMessageIds: vi.fn() }))
-vi.mock('@/lib/db/schema', () => ({ generateId: vi.fn(() => 'message-id') }))
+vi.mock('@/lib/db/schema', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/db/schema')>()
+  return {
+    ...actual,
+    generateId: vi.fn(() => 'message-id')
+  }
+})
 vi.mock('@/lib/rate-limit/adaptive-limit', () => ({
   checkAndEnforceAdaptiveLimit: vi.fn()
 }))

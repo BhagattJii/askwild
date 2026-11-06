@@ -1,6 +1,7 @@
 import { createId } from '@paralleldrive/cuid2'
 import { InferSelectModel, sql } from 'drizzle-orm'
 import {
+  boolean,
   check,
   customType,
   index,
@@ -529,6 +530,33 @@ export const additionalUsageInterest = pgTable(
 export type AdditionalUsageInterest = InferSelectModel<
   typeof additionalUsageInterest
 >
+
+export const userPreferences = pgTable(
+  'user_preferences',
+  {
+    userId: varchar('user_id', { length: USER_ID_LENGTH }).primaryKey(),
+    responseLanguage: varchar('response_language', {
+      length: 16,
+      enum: ['auto', 'en', 'hi', 'hinglish']
+    })
+      .notNull()
+      .default('auto'),
+    autosuggest: boolean('autosuggest').notNull().default(true),
+    bio: text('bio'),
+    updatedAt: timestamp('updated_at').notNull().defaultNow()
+  },
+  () => [
+    pgPolicy('users_all_own_preferences', {
+      as: 'permissive',
+      for: 'all',
+      to: 'public',
+      using: sql`user_id = (select current_setting('app.current_user_id', true))`,
+      withCheck: sql`user_id = (select current_setting('app.current_user_id', true))`
+    })
+  ]
+).enableRLS()
+
+export type UserPreferences = InferSelectModel<typeof userPreferences>
 
 // Better Auth tables (user, session, account, verification, invitations)
 // are defined in lib/auth/better-auth/schema.ts and re-exported here so the
