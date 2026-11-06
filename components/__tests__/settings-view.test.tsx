@@ -1,10 +1,7 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { deleteAccount } from '@/lib/actions/account'
-import { signOut } from '@/lib/actions/auth'
 import type { AppUser } from '@/lib/auth/types'
-import { chatStore } from '@/lib/chat-store'
 import { AppUserProvider } from '@/lib/contexts/app-user-context'
 import { DEFAULT_PREFERENCES } from '@/lib/preferences/shared'
 
@@ -19,14 +16,6 @@ vi.mock('@/lib/actions/preferences', () => ({
       bio: ''
     }
   }))
-}))
-
-vi.mock('@/lib/actions/account', () => ({
-  deleteAccount: vi.fn()
-}))
-
-vi.mock('@/lib/actions/auth', () => ({
-  signOut: vi.fn()
 }))
 
 vi.mock('sonner', () => ({
@@ -96,7 +85,7 @@ describe('SettingsView', () => {
     vi.clearAllMocks()
   })
 
-  it('defaults to the My Account tab with identity rows and delete', () => {
+  it('defaults to the My Account tab with identity rows', () => {
     renderSettings()
 
     expect(
@@ -106,9 +95,6 @@ describe('SettingsView', () => {
     expect(screen.getAllByText('person@example.com').length).toBeGreaterThan(0)
     expect(screen.getByText('Full name')).toBeInTheDocument()
     expect(screen.getByText('Email')).toBeInTheDocument()
-    expect(
-      screen.getByRole('button', { name: 'Delete account' })
-    ).toBeInTheDocument()
   })
 
   it('switches to Preferences with only bright and dark appearance options', async () => {
@@ -143,29 +129,8 @@ describe('SettingsView', () => {
     expect(setThemeMock).toHaveBeenCalledWith('dark')
   })
 
-  it('deletes the account and clears the session', async () => {
-    vi.mocked(deleteAccount).mockResolvedValue({ success: true })
-    vi.mocked(signOut).mockResolvedValue({ success: true })
+  it('does not show delete account in settings anymore', () => {
     renderSettings()
-
-    chatStore.getOrCreate('cached', { messages: [] })
-
-    fireEvent.click(screen.getByRole('button', { name: 'Delete account' }))
-    fireEvent.click(
-      screen.getAllByRole('button', { name: 'Delete account' }).at(-1)!
-    )
-
-    await waitFor(() => {
-      expect(deleteAccount).toHaveBeenCalledTimes(1)
-      expect(signOut).toHaveBeenCalledTimes(1)
-      expect(chatStore.get('cached')).toBeUndefined()
-      expect(mockPush).toHaveBeenCalledWith('/')
-      expect(mockRefresh).toHaveBeenCalled()
-    })
-  })
-
-  it('hides delete account when the provider does not support it', () => {
-    renderSettings(user, { deleteUser: false })
 
     expect(
       screen.queryByRole('button', { name: 'Delete account' })

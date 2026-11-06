@@ -24,7 +24,11 @@ import {
 import { Button } from '@/components/ui/button'
 import { Spinner } from '@/components/ui/spinner'
 
-export function DeleteAccountButton() {
+export function DeleteAccountButton({
+  appearance = 'button'
+}: {
+  appearance?: 'button' | 'menu'
+} = {}) {
   const router = useRouter()
   const [isDeleting, startTransition] = useTransition()
 
@@ -53,10 +57,21 @@ export function DeleteAccountButton() {
   return (
     <AlertDialog>
       <AlertDialogTrigger asChild>
-        <Button type="button" variant="destructive" className="gap-2">
-          <Trash2 className="size-4" />
-          Delete account
-        </Button>
+        {appearance === 'menu' ? (
+          <Button
+            type="button"
+            variant="ghost"
+            className="w-full justify-start gap-2 px-2 text-destructive hover:text-destructive"
+          >
+            <Trash2 className="size-4" />
+            Delete account
+          </Button>
+        ) : (
+          <Button type="button" variant="destructive" className="gap-2">
+            <Trash2 className="size-4" />
+            Delete account
+          </Button>
+        )}
       </AlertDialogTrigger>
       <AlertDialogContent className="max-w-md">
         <AlertDialogHeader>

@@ -6,7 +6,6 @@ import Link from 'next/link'
 import { IconArrowLeft as ArrowLeft } from '@tabler/icons-react'
 
 import type { AppUser } from '@/lib/auth/types'
-import { useAuthCapabilities } from '@/lib/contexts/app-user-context'
 import type { Preferences } from '@/lib/preferences/shared'
 import { cn } from '@/lib/utils'
 
@@ -17,9 +16,6 @@ import {
 } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 
-import {
-  DeleteAccountButton
-} from '@/components/settings/delete-account-button'
 import {
   PersonalizePanel,
   PreferencesPanel
@@ -60,7 +56,6 @@ export function SettingsView({
   initialPreferences,
   initialTab = 'account'
 }: SettingsViewProps) {
-  const capabilities = useAuthCapabilities()
   const [tab, setTab] = useState<TabId>(initialTab)
 
   const selectTab = (id: TabId) => {
@@ -71,7 +66,7 @@ export function SettingsView({
   const activeTab = tabs.find(item => item.id === tab) ?? tabs[0]
 
   return (
-    <div className="min-h-svh bg-background">
+    <div className="h-full min-h-0 overflow-y-auto overscroll-y-contain bg-background">
       <main className="mx-auto w-full max-w-4xl px-4 pb-16 pt-6 sm:px-6 md:pt-10">
         <Link
           href="/"
@@ -163,21 +158,6 @@ export function SettingsView({
                     {user.email}
                   </p>
                 </div>
-
-                {capabilities.deleteUser && (
-                  <div className="flex flex-col gap-3 py-5 sm:flex-row sm:items-center sm:justify-between sm:gap-6">
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium">Delete account</p>
-                      <p className="mt-1 text-sm text-muted-foreground">
-                        Permanently remove your account, chats, and files.
-                        This action cannot be undone.
-                      </p>
-                    </div>
-                    <div className="shrink-0">
-                      <DeleteAccountButton />
-                    </div>
-                  </div>
-                )}
               </div>
             )}
 

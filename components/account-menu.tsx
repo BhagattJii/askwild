@@ -13,6 +13,7 @@ import {
 import { signOut } from '@/lib/actions/auth'
 import type { AppUser } from '@/lib/auth/types'
 import { chatStore } from '@/lib/chat-store'
+import { useAuthCapabilities } from '@/lib/contexts/app-user-context'
 
 import {
   AlertDialog,
@@ -32,6 +33,10 @@ import {
 } from '@/components/ui/popover'
 import { Separator } from '@/components/ui/separator'
 import { Spinner } from '@/components/ui/spinner'
+
+import {
+  DeleteAccountButton
+} from '@/components/settings/delete-account-button'
 
 function getInitials(name: string, email: string | null | undefined): string {
   if (name && name !== 'User') {
@@ -62,6 +67,7 @@ interface AccountMenuProps {
 
 export function AccountMenu({ user, trigger }: AccountMenuProps) {
   const router = useRouter()
+  const capabilities = useAuthCapabilities()
   const [isPopoverOpen, setIsPopoverOpen] = useState(false)
   const [confirmSignOut, setConfirmSignOut] = useState(false)
   const [isSigningOut, startSignOutTransition] = useTransition()
@@ -163,6 +169,13 @@ export function AccountMenu({ user, trigger }: AccountMenuProps) {
             <LogOut className="size-4 text-muted-foreground" />
             Sign out
           </button>
+
+          {capabilities.deleteUser && (
+            <>
+              <Separator className="my-1.5" />
+              <DeleteAccountButton appearance="menu" />
+            </>
+          )}
         </PopoverContent>
       </Popover>
 
