@@ -160,7 +160,7 @@ SEARXNG_SECRET=""  # generate with: openssl rand -base64 32
 # Search Behavior
 SEARXNG_DEFAULT_DEPTH=basic  # Set to 'basic' or 'advanced'
 SEARXNG_MAX_RESULTS=50
-SEARXNG_ENGINES=google,bing,duckduckgo,wikipedia
+SEARXNG_ENGINES=google,bing,duckduckgo
 SEARXNG_TIME_RANGE=None  # day, week, month, year, or None
 SEARXNG_SAFESEARCH=0  # 0: off, 1: moderate, 2: strict
 
@@ -178,6 +178,24 @@ SEARXNG_LIMITER=false
   - `advanced`: Includes content crawling and relevance scoring
 - `SEARXNG_CRAWL_MULTIPLIER`: In advanced mode, determines how many results to crawl
   - Example: If `MAX_RESULTS=10` and `CRAWL_MULTIPLIER=4`, up to 40 results will be crawled
+
+#### SearXNG engine defaults (v-latest, see searxng-settings.yml)
+
+`use_default_settings: true` with these defaults:
+
+```yaml
+search:
+  default_engines: [google, bing, duckduckgo, wikipedia]
+engines:
+  - name: yandex      # disabled: loosely-matched results, poor for English/India
+    disabled: true
+```
+
+Yandex is explicitly disabled in this repo's settings. If your deployed
+SearXNG instance needs good Google coverage, prefer an instance with proxies
+(Google blocks most datacenter IPs); Bing and DuckDuckGo work reliably
+without proxies. If you are rate-limited by Google, remove `google` and keep
+`bing,duckduckgo`.
 
 #### Customizing SearXNG
 

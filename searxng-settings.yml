@@ -33,5 +33,12 @@ server:
 search:
   formats:
     - json
+  # Yandex returns loosely-matched results on most queries (bad ranking for
+  # English/international topics) and is disabled below. These four are the
+  # reliable backbone: Bing (works without proxies), DuckDuckGo, and Google
+  # where it is not blocked, plus Wikipedia for encyclopedic grounding.
   default_engines:
-    - yandex
+    - google
+    - bing
+    - duckduckgo
+    - wikipedia
