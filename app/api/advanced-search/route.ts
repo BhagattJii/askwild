@@ -16,6 +16,21 @@ import {
 import { safeFetch } from '@/lib/utils/safe-fetch'
 
 /**
+ * This route crawls pages with jsdom and is expensive. It must only ever be
+ * called by Askwild's own search tool, so it is gated by a shared secret
+ * instead of being exposed as an open proxy.
+ */
+function isInternalCaller(request: Request): boolean {
+  const expected = process.env.INTERNAL_API_TOKEN
+  if (!expected) {
+    // Fail closed: no token configured, no access.
+    return false
+  }
+  const token = request.headers.get('x-askwild-internal')
+  return typeof token === 'string' && token === expected
+}
+
+/**
  * Maximum number of results to fetch from SearXNG.
  * Increasing this value can improve result quality but may impact performance.
  * In advanced search mode, this is multiplied by SEARXNG_CRAWL_MULTIPLIER for initial fetching.
@@ -26,7 +41,6 @@ const SEARXNG_MAX_RESULTS = Math.max(
 )
 
 const CACHE_TTL = 3600 // Cache time-to-live in seconds (1 hour)
-const CACHE_EXPIRATION_CHECK_INTERVAL = 3600000 // 1 hour in milliseconds
 
 let redisClient: Redis | ReturnType<typeof createClient> | null = null
 
@@ -113,38 +127,50 @@ async function setCachedResults(
   }
 }
 
-// Function to periodically clean up expired cache entries
-async function cleanupExpiredCache() {
-  try {
-    const client = await initializeRedisClient()
-    if (!client) return
-
-    const keys = await client.keys('search:*')
-    for (const key of keys) {
-      const ttl = await client.ttl(key)
-      if (ttl <= 0) {
-        await client.del(key)
-        console.log(`Removed expired cache entry: ${key}`)
-      }
-    }
-  } catch (error) {
-    console.error('Cache cleanup error:', error)
-  }
-}
-
-// Set up periodic cache cleanup
-setInterval(cleanupExpiredCache, CACHE_EXPIRATION_CHECK_INTERVAL)
-
 export async function POST(request: Request) {
+  if (!isInternalCaller(request)) {
+    return NextResponse.json({ message: 'Not found' }, { status: 404 })
+  }
+
+  let body: { query?: string } & Record<string, unknown>
+  try {
+    body = await request.json()
+  } catch {
+    return NextResponse.json(
+      { message: 'Invalid request body' },
+      { status: 400 }
+    )
+  }
   const { query, maxResults, searchDepth, includeDomains, excludeDomains } =
-    await request.json()
+    body
+
+  if (typeof query !== 'string' || query.length === 0 || query.length > 500) {
+    return NextResponse.json(
+      { message: 'Query must be 1-500 characters' },
+      { status: 400 }
+    )
+  }
 
   const SEARXNG_DEFAULT_DEPTH = process.env.SEARXNG_DEFAULT_DEPTH || 'basic'
 
   try {
-    const cacheKey = `search:${query}:${maxResults}:${searchDepth}:${
-      Array.isArray(includeDomains) ? includeDomains.join(',') : ''
-    }:${Array.isArray(excludeDomains) ? excludeDomains.join(',') : ''}`
+    // Strict shapes only — anything unexpected gets defaults, never spread into the query.
+    const cleanMaxResults =
+      typeof maxResults === 'number' && Number.isFinite(maxResults)
+        ? Math.max(1, Math.min(maxResults, SEARXNG_MAX_RESULTS))
+        : 10
+    const cleanDepth =
+      searchDepth === 'basic' || searchDepth === 'advanced'
+        ? searchDepth
+        : SEARXNG_DEFAULT_DEPTH
+    const cleanInclude = Array.isArray(includeDomains)
+      ? includeDomains.filter((d): d is string => typeof d === 'string')
+      : []
+    const cleanExclude = Array.isArray(excludeDomains)
+      ? excludeDomains.filter((d): d is string => typeof d === 'string')
+      : []
+
+    const cacheKey = `search:${query}:${cleanMaxResults}:${cleanDepth}:${cleanInclude.join(',')}:${cleanExclude.join(',')}`
 
     // Try to get cached results
     const cachedResults = await getCachedResults(cacheKey)
@@ -154,11 +180,11 @@ export async function POST(request: Request) {
 
     // If not cached, perform the search
     const results = await advancedSearchXNGSearch(
-      query,
-      Math.min(maxResults, SEARXNG_MAX_RESULTS),
-      searchDepth || SEARXNG_DEFAULT_DEPTH,
-      Array.isArray(includeDomains) ? includeDomains : [],
-      Array.isArray(excludeDomains) ? excludeDomains : []
+      query as string,
+      cleanMaxResults,
+      cleanDepth as 'basic' | 'advanced',
+      cleanInclude,
+      cleanExclude
     )
 
     // Cache the results
@@ -170,7 +196,7 @@ export async function POST(request: Request) {
     return NextResponse.json(
       {
         message: 'Internal Server Error',
-        error: error instanceof Error ? error.message : String(error),
+        error: 'Search failed',
         query: query,
         results: [],
         images: [],
