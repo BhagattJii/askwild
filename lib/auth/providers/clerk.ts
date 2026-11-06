@@ -122,6 +122,46 @@ export const clerkAuthProvider: AuthProvider = {
   }
 }
 
+// Process-local profile cache. The Clerk backend profile endpoint is a
+// network call on every page request; without this the whole app waits on
+// it and, worse, flips to the signed-out UI whenever the call hiccups.
+const PROFILE_TTL_MS = 10 * 60 * 1000
+const PROFILE_CACHE_MAX = 500
+const profileCache = new Map<string, { user: AppUser; expires: number }>()
+
+function readProfileCache(userId: string): AppUser | null {
+  const entry = profileCache.get(userId)
+  if (!entry) {
+    return null
+  }
+  if (entry.expires <= Date.now()) {
+    profileCache.delete(userId)
+    return null
+  }
+  return entry.user
+}
+
+function writeProfileCache(userId: string, user: AppUser) {
+  if (profileCache.size >= PROFILE_CACHE_MAX) {
+    const oldest = profileCache.keys().next().value
+    if (oldest !== undefined) {
+      profileCache.delete(oldest)
+    }
+  }
+  profileCache.set(userId, { user, expires: Date.now() + PROFILE_TTL_MS })
+}
+
+function buildFallbackUser(userId: string): AppUser {
+  return {
+    id: userId,
+    email: null,
+    name: null,
+    image: null,
+    createdAt: new Date(),
+    role: 'user'
+  }
+}
+
 /**
  * Resolves the AppUser from the Clerk session. Falls back to null when
  * Clerk is not active (another provider selected) or outside an HTTP
@@ -137,18 +177,35 @@ async function resolveUser(): Promise<AppUser | null> {
     if (!userId) {
       return null
     }
-    const user = await (await clerkClient()).users.getUser(userId)
-    const email =
-      user.primaryEmailAddress?.emailAddress ??
-      user.emailAddresses[0]?.emailAddress ??
-      null
-    return {
-      id: user.id,
-      email,
-      name: user.fullName ?? user.username ?? null,
-      image: user.imageUrl ?? null,
-      createdAt: new Date(user.createdAt),
-      role: roleFor(email)
+
+    const cached = readProfileCache(userId)
+    if (cached) {
+      return cached
+    }
+
+    try {
+      const user = await (await clerkClient()).users.getUser(userId)
+      const email =
+        user.primaryEmailAddress?.emailAddress ??
+        user.emailAddresses[0]?.emailAddress ??
+        null
+      const resolved = {
+        id: user.id,
+        email,
+        name: user.fullName ?? user.username ?? null,
+        image: user.imageUrl ?? null,
+        createdAt: new Date(user.createdAt),
+        role: roleFor(email)
+      }
+      writeProfileCache(userId, resolved)
+      return resolved
+    } catch (error) {
+      // The session is valid but the profile lookup failed — do not flip
+      // the UI to signed-out, which makes the header show "Sign in"
+      // for authenticated users on every transient Clerk hiccup. Serve a
+      // minimal profile and let the cache refill on the next request.
+      console.warn('[clerk] users.getUser failed, using fallback', error)
+      return buildFallbackUser(userId)
     }
   } catch {
     return null
