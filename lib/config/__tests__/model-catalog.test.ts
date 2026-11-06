@@ -30,14 +30,14 @@ describe('model catalog', () => {
     const catalog = getModelCatalog()
 
     expect(catalog.map(model => model.tier)).toEqual(['small', 'medium', 'large'])
-    expect(catalog[0].id).toBe('nvidia/nemotron-3.5-bolt-e4b')
+    expect(catalog[0].id).toBe('nvidia/nemotron-3.5-lightning-30b-a3b')
     expect(catalog[2].id).toBe('nvidia/nemotron-3-ultra-550b-a55b')
   })
 
   it('guest-locks medium and large models only', () => {
     expect(getGuestLockedModelKeys().sort()).toEqual(
       [
-        'openai-compatible:nvidia/nemotron-3.5-lightning-30b-a3b',
+        'openai-compatible:nvidia/nemotron-3-nano-omni-30b-a3b-reasoning',
         'openai-compatible:nvidia/nemotron-3-ultra-550b-a55b'
       ].sort()
     )
@@ -56,20 +56,20 @@ describe('model catalog', () => {
     const selected = selectCatalogModel({ cookieStore: store, isGuest: true })
 
     expect(selected.tier).toBe('small')
-    expect(selected.id).toBe('nvidia/nemotron-3.5-bolt-e4b')
+    expect(selected.id).toBe('nvidia/nemotron-3.5-lightning-30b-a3b')
   })
 
   it('gives signed-in users their saved catalog model', () => {
     const store = cookieStoreWith(
       serializeModelSelectionCookie({
         providerId: 'openai-compatible',
-        modelId: 'nvidia/nemotron-3.5-lightning-30b-a3b'
+        modelId: 'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning'
       })
     )
 
     const selected = selectCatalogModel({ cookieStore: store, isGuest: false })
 
-    expect(selected.id).toBe('nvidia/nemotron-3.5-lightning-30b-a3b')
+    expect(selected.id).toBe('nvidia/nemotron-3-nano-omni-30b-a3b-reasoning')
   })
 
   it('falls back to the large model for unknown or expired cookie values', () => {

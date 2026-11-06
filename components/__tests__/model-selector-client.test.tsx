@@ -29,15 +29,15 @@ vi.mock('next/navigation', () => ({
 }))
 
 const modelSmall = {
-  id: 'nvidia/nemotron-3.5-bolt-e4b',
-  name: 'Nemotron 3.5 Bolt',
+  id: 'nvidia/nemotron-3.5-lightning-30b-a3b',
+  name: 'Nemotron 3.5 Lightning',
   provider: 'NVIDIA',
   providerId: 'openai-compatible'
 }
 
 const modelMedium = {
-  id: 'nvidia/nemotron-3.5-lightning-30b-a3b',
-  name: 'Nemotron 3.5 Lightning',
+  id: 'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning',
+  name: 'Nemotron 3 Nano Omni Reasoning',
   provider: 'NVIDIA',
   providerId: 'openai-compatible'
 }
@@ -54,10 +54,10 @@ const baseData = {
   modelsByProvider: {
     'openai-compatible': [modelSmall, modelMedium, modelLarge]
   },
-  selectedModelKey: 'openai-compatible:nvidia/nemotron-3.5-bolt-e4b',
+  selectedModelKey: 'openai-compatible:nvidia/nemotron-3.5-lightning-30b-a3b',
   hasAvailableModels: true,
   guestLockedKeys: [
-    'openai-compatible:nvidia/nemotron-3.5-lightning-30b-a3b',
+    'openai-compatible:nvidia/nemotron-3-nano-omni-30b-a3b-reasoning',
     'openai-compatible:nvidia/nemotron-3-ultra-550b-a55b'
   ]
 }
@@ -112,11 +112,11 @@ describe('ModelSelectorClient guest gating', () => {
     fireEvent.click(screen.getByRole('combobox'))
 
     expect(
-      screen.getByRole('option', { name: 'Nemotron 3.5 Bolt' })
+      screen.getByRole('option', { name: 'Nemotron 3.5 Lightning' })
     ).toBeInTheDocument()
     expect(
       screen.getByRole('option', {
-        name: 'Nemotron 3.5 Lightning (sign in to unlock)'
+        name: 'Nemotron 3 Nano Omni Reasoning (sign in to unlock)'
       })
     ).toBeInTheDocument()
     expect(
@@ -136,7 +136,7 @@ describe('ModelSelectorClient guest gating', () => {
     fireEvent.click(screen.getByRole('combobox'))
     fireEvent.click(
       screen.getByRole('option', {
-        name: 'Nemotron 3.5 Lightning (sign in to unlock)'
+        name: 'Nemotron 3 Nano Omni Reasoning (sign in to unlock)'
       })
     )
 
@@ -148,7 +148,7 @@ describe('ModelSelectorClient guest gating', () => {
     renderSelector(signedInData, undefined, signedInUser)
 
     fireEvent.click(screen.getByRole('combobox'))
-    fireEvent.click(screen.getByRole('option', { name: 'Nemotron 3.5 Lightning' }))
+    fireEvent.click(screen.getByRole('option', { name: 'Nemotron 3 Nano Omni Reasoning' }))
 
     await waitFor(() => {
       expect(document.cookie).toContain('selectedModel')
