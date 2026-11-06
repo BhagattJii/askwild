@@ -8,6 +8,7 @@ import type {
 
 import type { createDraftTools } from '../tools/draft'
 import type { fetchTool } from '../tools/fetch'
+import type { createKnowledgeTools } from '../tools/knowledge'
 import type { createQuestionTool } from '../tools/question'
 import type { createSearchTool } from '../tools/search'
 import type { createTodoTools } from '../tools/todo'
@@ -20,7 +21,8 @@ export type ResearcherTools = {
   fetch: typeof fetchTool
   askQuestion: ReturnType<typeof createQuestionTool>
 } & ReturnType<typeof createTodoTools> &
-  ReturnType<typeof createDraftTools>
+  ReturnType<typeof createDraftTools> &
+  ReturnType<typeof createKnowledgeTools>
 
 // Runtime context carried through the generation lifecycle. Included in
 // telemetry so each observation keeps the metadata v6 attached via

@@ -9,6 +9,7 @@ import { type Model } from '@/lib/types/models'
 
 import { createDraftTools } from '../tools/draft'
 import { createFetchTool } from '../tools/fetch'
+import { createKnowledgeTools } from '../tools/knowledge'
 import { createQuestionTool } from '../tools/question'
 import { createSearchTool } from '../tools/search'
 import { createTodoTools } from '../tools/todo'
@@ -103,11 +104,20 @@ export function createResearcher({
     })
 
     // Create model-specific tools with proper typing
+    const knowledgeToolNames = [
+      'dynamic__wikiSummary',
+      'dynamic__weather',
+      'dynamic__currencyRate',
+      'dynamic__stockQuote',
+      'dynamic__newsSearch',
+      'dynamic__academicSearch'
+    ] as Array<keyof ResearcherTools>
     const labelAllocator = createCitationLabelAllocator(citationLabelSeed)
     const originalSearchTool = createSearchTool(model, {
       labelAllocator
     })
     const fetchTool = createFetchTool({ labelAllocator })
+    const knowledgeTools = createKnowledgeTools()
     const askQuestionTool = createQuestionTool(model)
     const todoTools = createTodoTools()
     const draftTools = createDraftTools(currentDraft)
@@ -121,10 +131,15 @@ export function createResearcher({
     switch (searchMode) {
       case 'quick':
         console.log(
-          '[Researcher] Quick mode: maxSteps=20, tools=[search, fetch, editDraft]'
+          '[Researcher] Quick mode: maxSteps=20, tools=[search, fetch, knowledge, editDraft]'
         )
         systemPrompt = getQuickModePrompt(userPreferences)
-        activeToolsList = ['search', 'fetch', 'editDraft']
+        activeToolsList = [
+          'search',
+          'fetch',
+          ...knowledgeToolNames,
+          'editDraft'
+        ]
         maxSteps = 20
         searchTool = wrapSearchToolForQuickMode(originalSearchTool)
         break
@@ -132,7 +147,13 @@ export function createResearcher({
       case 'adaptive':
       default:
         systemPrompt = getAdaptiveModePrompt(userPreferences)
-        activeToolsList = ['search', 'fetch', 'todoWrite', 'editDraft']
+        activeToolsList = [
+          'search',
+          'fetch',
+          ...knowledgeToolNames,
+          'todoWrite',
+          'editDraft'
+        ]
         console.log(
           `[Researcher] Adaptive mode: maxSteps=50, tools=[${activeToolsList.join(', ')}]`
         )
@@ -145,6 +166,7 @@ export function createResearcher({
     const tools: ResearcherTools = {
       search: searchTool,
       fetch: fetchTool,
+      ...knowledgeTools,
       askQuestion: askQuestionTool,
       ...todoTools,
       ...draftTools
