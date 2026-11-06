@@ -33,12 +33,26 @@ server:
 search:
   formats:
     - json
-  # Yandex returns loosely-matched results on most queries (bad ranking for
-  # English/international topics) and is disabled below. These four are the
-  # reliable backbone: Bing (works without proxies), DuckDuckGo, and Google
-  # where it is not blocked, plus Wikipedia for encyclopedic grounding.
+  # Yandex (loosely-matched, poor for English/international topics) is
+  # disabled below. The reliable backbone is Bing + DuckDuckGo (both work
+  # without proxies); Wikipedia grounds encyclopedic queries.
   default_engines:
-    - google
     - bing
     - duckduckgo
+    # google — works but blocked on most datacenter IPs (Render/AWS/GCP) with
+    # HTTP 403/consent walls. Uncomment only with your own proxies.
+    # - google
     - wikipedia
+
+engines:
+  - name: yandex
+    disabled: true
+  # Google only with your own proxies — blocked on most datacenter IPs (Render/AWS/GCP).
+  - name: google
+    disabled: true
+  - name: bing
+    disabled: false
+  - name: duckduckgo
+    disabled: false
+  - name: wikipedia
+    disabled: false
