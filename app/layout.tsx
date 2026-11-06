@@ -4,7 +4,7 @@ import { Inter as FontSans } from 'next/font/google'
 import { ClerkProvider } from '@clerk/nextjs'
 import { Analytics } from '@vercel/analytics/next'
 
-import { getCurrentUser, getCurrentUserId } from '@/lib/auth/get-current-user'
+import { getCurrentUser } from '@/lib/auth/get-current-user'
 import { getAuthProvider, withShareOptIn } from '@/lib/auth/provider'
 import { AppUserProvider } from '@/lib/contexts/app-user-context'
 import { UserProvider } from '@/lib/contexts/user-context'
@@ -96,7 +96,7 @@ export default async function RootLayout({
     authProvider.name
   )
 
-  const userId = user?.id ?? (await getCurrentUserId())
+  const userId = user?.id
   const clerkEnabled = process.env.AUTH_PROVIDER === 'clerk'
   const isCloudDeployment = process.env.ASKWILD_CLOUD_DEPLOYMENT === 'true'
   const usageBudgetEnabled = Boolean(
