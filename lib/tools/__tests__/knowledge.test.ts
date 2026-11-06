@@ -2,6 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import {
   createAcademicSearchTool,
+  createCommodityTool,
+  createCryptoPriceTool,
   createCurrencyTool,
   createNewsSearchTool,
   createStockQuoteTool,
@@ -216,5 +218,76 @@ describe('dynamic__academicSearch', () => {
     expect(result.papers[0].title).toBe('Quantum Error Correction at Scale')
     expect(result.papers[0].link).toBe('https://arxiv.org/abs/2604.12345v1')
     expect(result.papers[0].authors).toContain('Alice Researcher')
+  })
+})
+
+describe('dynamic__cryptoPrice', () => {
+  it('resolves a common alias and returns INR price', async () => {
+    fetchMock.mockResolvedValue(
+      jsonResponse({
+        bitcoin: {
+          inr: 7097945,
+          usd: 75549,
+          inr_24h_change: -6.47,
+          usd_24h_change: -6.03,
+          inr_24h_vol: 4240711131216.1113,
+          usd_24h_vol: 45136955567.07609
+        }
+      })
+    )
+
+    const result = await toolCall(createCryptoPriceTool(), {
+      coin: 'BTC',
+      vs: 'INR'
+    })
+
+    expect(result.found).toBe(true)
+    expect(result.coin).toBe('bitcoin')
+    expect(result.price).toBe(7097945)
+    expect(result.change24hPercent).toBeLessThan(0)
+  })
+
+  it('fails soft for an unknown coin', async () => {
+    fetchMock.mockResolvedValue(jsonResponse({}))
+
+    const result = await toolCall(createCryptoPriceTool(), {
+      coin: 'zzznosuchcoin',
+      vs: 'INR'
+    })
+
+    expect(result.found).toBe(false)
+  })
+})
+
+describe('dynamic__commodity', () => {
+  it('returns usd price and INR conversion', async () => {
+    fetchMock
+      .mockResolvedValueOnce(
+        jsonResponse({
+          chart: {
+            result: [
+              {
+                meta: {
+                  symbol: 'GC=F',
+                  exchangeName: 'COMEX',
+                  regularMarketPrice: 2387.5,
+                  previousClose: 2371.2,
+                  regularMarketTime: 1793943032
+                }
+              }
+            ]
+          }
+        })
+      )
+      .mockResolvedValueOnce(
+        jsonResponse({ date: '2026-11-05', rates: { INR: 94.48 } })
+      )
+
+    const result = await toolCall(createCommodityTool(), { commodity: 'gold' })
+
+    expect(result.found).toBe(true)
+    expect(result.usd).toBe(2387.5)
+    expect(result.inr).toBeCloseTo(2387.5 * 94.48, 0)
+    expect(result.change).toBeCloseTo(16.3, 1)
   })
 })

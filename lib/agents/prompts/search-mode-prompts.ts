@@ -38,6 +38,8 @@ function getKnowledgeToolsGuidance(): string {
 - dynamic__stockQuote — for live share/index prices (Indian: RELIANCE.NS, ^NSEI, ^BSESN; US: AAPL, ^GSPC)
 - dynamic__newsSearch — for latest news headlines (Indian outlets default)
 - dynamic__academicSearch — for research papers and abstracts (arXiv)
+- dynamic__cryptoPrice — for Bitcoin/Ethereum/any coin price in INR and USD (CoinGecko)
+- dynamic__commodity — for gold/silver/crude oil prices (USD converted to INR)
 - For live data questions, call the matching tool before searching; answer with the live value and state the source.
 - If a tool returns found:false / ok:false, say the live value is unavailable and continue with web search — never invent numbers, never state a live value from memory.`
 }

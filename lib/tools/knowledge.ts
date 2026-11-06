@@ -362,6 +362,160 @@ export function createAcademicSearchTool() {
 }
 
 /** Aggregates the knowledge tools as one object for spreading into the agent. */
+/** Map of common symbols to CoinGecko ids. Unknown coins fall back to the
+ * raw lowercase slug (works for exact CoinGecko slugs). */
+const CRYPTO_ALIAS: Record<string, string> = {
+  btc: 'bitcoin',
+  bitcoin: 'bitcoin',
+  eth: 'ethereum',
+  ethereum: 'ethereum',
+  sol: 'solana',
+  solana: 'solana',
+  bnb: 'binancecoin',
+  xrp: 'ripple',
+  ada: 'cardano',
+  doge: 'dogecoin',
+  dot: 'polkadot',
+  trx: 'tron',
+  ton: 'the-open-network',
+  ltc: 'litecoin',
+  link: 'chainlink',
+  avax: 'avalanche-2',
+  usdt: 'tether',
+  usdc: 'usd-coin'
+}
+
+export function createCryptoPriceTool() {
+  return tool({
+    description:
+      'Live crypto prices with 24h change (CoinGecko). Use for Bitcoin/Ethereum/any coin price question — INR and USD.',
+    inputSchema: z.object({
+      coin: z
+        .string()
+        .min(1)
+        .max(40)
+        .describe('Coin symbol or name, e.g. BTC, bitcoin, ETH'),
+      vs: z.enum(['INR', 'USD']).default('INR').describe('Quote currency')
+    }),
+    async execute({ coin, vs }) {
+      const key =
+        CRYPTO_ALIAS[coin.trim().toLowerCase()] ??
+        coin.trim().toLowerCase().replace(/\s+/g, '-')
+      try {
+        const data = (await fetchJson(
+          `https://api.coingecko.com/api/v3/simple/price?ids=${encodeURIComponent(key)}&vs_currencies=inr,usd&include_24hr_change=true&include_24hr_vol=true`
+        )) as Record<
+          string,
+          {
+            inr?: number
+            usd?: number
+            inr_24h_change?: number
+            usd_24h_change?: number
+            inr_24h_vol?: number
+            usd_24h_vol?: number
+          }
+        >
+        const price = data?.[key]
+        if (!price) {
+          return { found: false as const, coin }
+        }
+        const quote = vs === 'USD' ? 'usd' : 'inr'
+        return {
+          found: true as const,
+          coin: key,
+          price: price[quote] ?? null,
+          vs,
+          inr: price.inr ?? null,
+          usd: price.usd ?? null,
+          change24hPercent: (quote === 'inr'
+            ? price.inr_24h_change
+            : price.usd_24h_change) ?? null,
+          volume24h: (quote === 'inr' ? price.inr_24h_vol : price.usd_24h_vol) ?? null
+        }
+      } catch {
+        return { found: false as const, coin }
+      }
+    }
+  })
+}
+
+const COMMODITIES: Record<string, { ticker: string; unit: string }> = {
+  gold: { ticker: 'GC=F', unit: 'troy oz' },
+  silver: { ticker: 'SI=F', unit: 'troy oz' },
+  'crude-oil': { ticker: 'CL=F', unit: 'barrel (WTI)' },
+  brent: { ticker: 'BZ=F', unit: 'barrel (Brent)' }
+}
+
+export function createCommodityTool() {
+  return tool({
+    description:
+      'Live gold, silver, and crude oil futures prices (USD, converted to INR). Use for any gold price / crude oil / silver question.',
+    inputSchema: z.object({
+      commodity: z
+        .enum(['gold', 'silver', 'crude-oil', 'brent'])
+        .describe('Which commodity to price')
+    }),
+    async execute({ commodity }) {
+      const meta = COMMODITIES[commodity]
+      try {
+        const [chartData, fxData] = await Promise.all([
+          fetchJson(
+            `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(meta.ticker)}?range=5d&interval=1d`
+          ) as Promise<{
+            chart?: {
+              result?: Array<{
+                meta?: {
+                  symbol?: string
+                  exchangeName?: string
+                  regularMarketPrice?: number
+                  previousClose?: number
+                  chartPreviousClose?: number
+                  regularMarketTime?: number
+                }
+              }>
+            }
+          }>,
+          fetchJson(
+            'https://api.frankfurter.dev/v1/latest?from=USD&to=INR'
+          ) as Promise<{ rates?: Record<string, number> }>
+        ])
+        const chartMeta = chartData?.chart?.result?.[0]?.meta
+        if (!chartMeta?.regularMarketPrice) {
+          return { found: false as const, commodity }
+        }
+        const previousClose =
+          chartMeta.previousClose ?? chartMeta.chartPreviousClose ?? null
+        const change = previousClose
+          ? chartMeta.regularMarketPrice - previousClose
+          : null
+        const changePercent =
+          previousClose && previousClose !== 0
+            ? (change! / previousClose) * 100
+            : null
+        const usdInr = fxData?.rates?.INR ?? null
+        return {
+          found: true as const,
+          commodity,
+          ticker: chartMeta.symbol ?? meta.ticker,
+          unit: meta.unit,
+          usd: chartMeta.regularMarketPrice,
+          inr:
+            usdInr !== null
+              ? Number((chartMeta.regularMarketPrice * usdInr).toFixed(2))
+              : null,
+          change,
+          changePercent,
+          updated: chartMeta.regularMarketTime
+            ? new Date(chartMeta.regularMarketTime * 1000).toISOString()
+            : null
+        }
+      } catch {
+        return { found: false as const, commodity }
+      }
+    }
+  })
+}
+
 export function createKnowledgeTools() {
   return {
     dynamic__wikiSummary: createWikiSummaryTool(),
@@ -369,6 +523,8 @@ export function createKnowledgeTools() {
     dynamic__currencyRate: createCurrencyTool(),
     dynamic__stockQuote: createStockQuoteTool(),
     dynamic__newsSearch: createNewsSearchTool(),
-    dynamic__academicSearch: createAcademicSearchTool()
+    dynamic__academicSearch: createAcademicSearchTool(),
+    dynamic__cryptoPrice: createCryptoPriceTool(),
+    dynamic__commodity: createCommodityTool()
   }
 }
