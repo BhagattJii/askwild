@@ -110,7 +110,9 @@ export function createResearcher({
       'dynamic__currencyRate',
       'dynamic__stockQuote',
       'dynamic__newsSearch',
-      'dynamic__academicSearch'
+      'dynamic__academicSearch',
+      'dynamic__cryptoPrice',
+      'dynamic__commodity'
     ] as Array<keyof ResearcherTools>
     const labelAllocator = createCitationLabelAllocator(citationLabelSeed)
     const originalSearchTool = createSearchTool(model, {

@@ -14,6 +14,8 @@ This guide covers the optional features and their configuration in Askwild.
   - [Clerk](#clerk)
   - [Supabase](#supabase)
 - [Guest Mode](#guest-mode)
+- [Live Data Tools](#live-data-tools)
+- [Model Tiers](#model-tiers)
 - [Other Features](#other-features)
 - [Privacy and Telemetry](./PRIVACY.md)
 
@@ -514,12 +516,16 @@ ENABLE_GUEST_CHAT=true
 For cloud deployments:
 
 ```bash
-GUEST_CHAT_DAILY_LIMIT=10  # Maximum requests per IP per day
+GUEST_CHAT_DAILY_LIMIT=25  # Maximum requests per IP per day
 UPSTASH_REDIS_REST_URL=[YOUR_UPSTASH_URL]
 UPSTASH_REDIS_REST_TOKEN=[YOUR_UPSTASH_TOKEN]
 ```
 
 Rate limiting only applies when `ASKWILD_CLOUD_DEPLOYMENT=true`.
+
+In cloud deployments guests are pinned to the free model tier (see
+[Model Tiers](#model-tiers)); larger models appear with a lock and open the
+sign-in prompt.
 
 ### Recommended Setup
 
@@ -530,6 +536,56 @@ Rate limiting only applies when `ASKWILD_CLOUD_DEPLOYMENT=true`.
 | Hosted sign-in          | `AUTH_PROVIDER=clerk` (Clerk dashboard keys)    |
 | Public Demo             | `ENABLE_GUEST_CHAT=true` with rate limiting     |
 | Production              | `ENABLE_AUTH=true` (Supabase authentication)    |
+
+## Live Data Tools
+
+Askwild ships with free, keyless knowledge tools that the model calls for
+time-sensitive or factual questions. Failures degrade gracefully (the agent
+falls back to web search) — no keys or crashes.
+
+| Tool | Returns |
+| ---- | ------- |
+| `dynamic__wikiSummary` | Wikipedia summary + source URL for "what/who/explain" questions |
+| `dynamic__weather` | Current conditions + 3-day forecast for any city (Open-Meteo) |
+| `dynamic__currencyRate` | Live mid-market FX conversion (Frankfurter) |
+| `dynamic__stockQuote` | Live price + daily change — Indian (`RELIANCE.NS`, `^NSEI`, `^BSESN`), US (`AAPL`, `^GSPC`) (Yahoo Finance) |
+| `dynamic__newsSearch` | Latest headlines with source and publication time (Google News) |
+| `dynamic__academicSearch` | arXiv papers with abstracts and links |
+| `dynamic__cryptoPrice` | Live coin prices in INR/USD with 24h change (CoinGecko) |
+| `dynamic__commodity` | Gold/silver/crude oil futures, USD converted to INR (Yahoo Finance + Frankfurter) |
+
+The tools are registered in `lib/tools/knowledge.ts` and enabled for both
+`quick` and `adaptive` search modes. Add or remove them in
+`lib/agents/researcher.ts` (`activeToolsList`) and the tool descriptions in
+`lib/agents/prompts/search-mode-prompts.ts`.
+
+## Model Tiers
+
+Production (`ASKWILD_CLOUD_DEPLOYMENT=true`) serves three NVIDIA-powered
+tiers from the OpenAI-compatible provider (`config/models/catalog.json`):
+
+| Tier | Model | Access |
+| ---- | ----- | ------ |
+| Small | `nvidia/nemotron-3.5-lightning-30b-a3b` (Nemotron 3.5 Lightning) | Everyone, including guests |
+| Medium | `nvidia/nemotron-3-nano-omni-30b-a3b-reasoning` (Nemotron 3 Nano Omni Reasoning) | Signed-in only (locked for guests) |
+| Large | `nvidia/nemotron-3-ultra-550b-a55b` (Nemotron 3 Ultra 550B) | Signed-in only (locked for guests) |
+
+Rules:
+
+- Model selection happens with priority: explicit cookie from the selector →
+  `config/models/catalog.json` for cloud deployments → `selectModel()` for
+  self-hosted mode. In cloud, guests are always pinned to the small tier —
+  a saved cookie from a previous signed-in session does not unlock it.
+- The selector appears in the composer next to the search mode switch. Guests
+  see every tier; locked tiers show a lock and open the sign-in modal.
+- Guest usage output (tokens) counts against `GUEST_CHAT_DAILY_LIMIT` per IP.
+- Signed-in usage counts against `AI_CHAT_DAILY_SECONDS` (active AI time,
+  default 3600/day), `OVERALL_CHAT_DAILY_LIMIT`, and, if configured, the
+  monthly usage budget. Admins and `ASKWILD_ADMIN_EMAILS` are exempt.
+
+The guest tier was promoted from `nemotron-3.5-bolt-e4b` (Nemotron 3.5 Bolt,
+4B) because Bolt cannot call tools reliably — it hallucinated instead of
+invoking the weather tool. Lightning answers with live data as expected.
 
 ## Other Features
 
