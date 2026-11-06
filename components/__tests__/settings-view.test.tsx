@@ -6,8 +6,20 @@ import { signOut } from '@/lib/actions/auth'
 import type { AppUser } from '@/lib/auth/types'
 import { chatStore } from '@/lib/chat-store'
 import { AppUserProvider } from '@/lib/contexts/app-user-context'
+import { DEFAULT_PREFERENCES } from '@/lib/preferences/shared'
 
 import { SettingsView } from '@/components/settings/settings-view'
+
+vi.mock('@/lib/actions/preferences', () => ({
+  updatePreferences: vi.fn(async () => ({
+    success: true,
+    preferences: {
+      responseLanguage: 'auto',
+      autosuggest: true,
+      bio: ''
+    }
+  }))
+}))
 
 vi.mock('@/lib/actions/account', () => ({
   deleteAccount: vi.fn()
@@ -69,7 +81,10 @@ function renderSettings(
       user={userProp}
       capabilities={{ ...capabilities, ...override }}
     >
-      <SettingsView user={userProp} />
+      <SettingsView
+        user={userProp}
+        initialPreferences={DEFAULT_PREFERENCES}
+      />
     </AppUserProvider>
   )
 }
@@ -79,21 +94,14 @@ describe('SettingsView', () => {
     vi.clearAllMocks()
   })
 
-  it('shows the account section and appearance options', () => {
+  it('shows the account section and the appearance selector', () => {
     renderSettings()
 
     expect(screen.getByText('Test Person')).toBeInTheDocument()
     expect(screen.getByText('person@example.com')).toBeInTheDocument()
-    expect(
-      screen.getByRole('radio', { name: 'Dark' })
-    ).toBeInTheDocument()
-  })
-
-  it('marks system as an appearance option and switches on click', () => {
-    renderSettings()
-
-    fireEvent.click(screen.getByRole('radio', { name: 'Light' }))
-    expect(setThemeMock).toHaveBeenCalledWith('light')
+    expect(screen.getByText('Appearance')).toBeInTheDocument()
+    expect(screen.getByText('Response language')).toBeInTheDocument()
+    expect(screen.getByText('Related questions')).toBeInTheDocument()
   })
 
   it('deletes the account and clears the session', async () => {
@@ -125,12 +133,12 @@ describe('SettingsView', () => {
     ).not.toBeInTheDocument()
   })
 
-  it('renders a signed-out view with appearance and help only', () => {
+  it('renders a signed-out view with a sign-in prompt instead', () => {
     renderSettings(null)
 
     expect(screen.queryByText('person@example.com')).not.toBeInTheDocument()
     expect(
-      screen.getByRole('radio', { name: 'Dark' })
+      screen.getByRole('link', { name: 'Sign in' })
     ).toBeInTheDocument()
   })
 })

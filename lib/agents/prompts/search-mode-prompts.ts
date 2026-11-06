@@ -32,6 +32,65 @@ function getIdentityGuidance(): string {
 
 // Search mode system prompts
 
+// Per-user style preferences folded into the system prompt. Every field is
+// optional so callers that do not know the user (guests, tests, static
+// prompt exports) get the default behaviour.
+export interface UserPromptPreferences {
+  responseLanguage?: 'auto' | 'en' | 'hi' | 'hinglish'
+  autosuggest?: boolean
+  bio?: string
+}
+
+function buildLanguageGuidance(
+  language: UserPromptPreferences['responseLanguage']
+): string {
+  if (language === 'en') {
+    return `LANGUAGE:
+- Always respond in English, regardless of the language of the question.
+`
+  }
+  if (language === 'hi') {
+    return `LANGUAGE:
+- Always respond in Hindi (Devanagari script), regardless of the language of the question.
+`
+  }
+  if (language === 'hinglish') {
+    return `LANGUAGE:
+- Always respond in Hinglish, i.e. Hindi written in Roman (Latin) script with common English technical terms, regardless of the language of the question.
+`
+  }
+  return ''
+}
+
+function buildBioGuidance(bio: string | undefined): string {
+  if (!bio || !bio.trim()) {
+    return ''
+  }
+  return `USER CONTEXT (provided by the user — honor it when answering):
+- ${bio.trim()}
+`
+}
+
+const DEFAULT_USER_PROMPT_PREFERENCES: UserPromptPreferences = {
+  responseLanguage: 'auto',
+  autosuggest: true
+}
+
+function relatedQuestionsSpec(prefs: UserPromptPreferences | undefined): string {
+  const autosuggest =
+    prefs?.autosuggest ?? DEFAULT_USER_PROMPT_PREFERENCES.autosuggest
+  return autosuggest === false ? '' : getRelatedQuestionsSpecPrompt()
+}
+
+function getHint(prefs: UserPromptPreferences | undefined): string {
+  const merged = { ...DEFAULT_USER_PROMPT_PREFERENCES, ...prefs }
+  const parts = [
+    buildLanguageGuidance(merged.responseLanguage),
+    buildBioGuidance(merged.bio)
+  ].filter(Boolean)
+  return parts.length > 0 ? `\n${parts.join('\n')}\n` : ''
+}
+
 function getSourceDirectionGuidance(allowFallback = true): string {
   return `Source direction (include/exclude domains):
 - When the user signals a source preference, pass it to the search tool via \`include_domains\` / \`exclude_domains\`:
@@ -46,13 +105,14 @@ function getSourceDirectionGuidance(allowFallback = true): string {
   }.`
 }
 
-export function getQuickModePrompt(): string {
+export function getQuickModePrompt(prefs?: UserPromptPreferences): string {
   const hasGeneralProvider = isGeneralSearchProviderAvailable()
 
   return `
 Instructions:
 
 ${getIdentityGuidance()}
+${getHint(prefs)}
 
 You are a fast, efficient AI assistant optimized for quick responses. You have access to web search and content retrieval.
 
@@ -179,7 +239,7 @@ ${getImageSpecPrompt()}
 
 ${getSourceCardsSpecPrompt()}
 
-${getRelatedQuestionsSpecPrompt()}
+${relatedQuestionsSpec(prefs)}
 `
 }
 
@@ -229,11 +289,12 @@ Rule precedence:
 7. Provide comprehensive and detailed responses based on search results, ensuring thorough coverage of the user's question`
 }
 
-export function getAdaptiveModePrompt(): string {
+export function getAdaptiveModePrompt(prefs?: UserPromptPreferences): string {
   return `
 Instructions:
 
 ${getIdentityGuidance()}
+${getHint(prefs)}
 
 You are a helpful AI assistant with access to real-time web search, content retrieval, task management, and the ability to ask clarifying questions.
 
@@ -358,7 +419,7 @@ ${getImageSpecPrompt()}
 
 ${getSourceCardsSpecPrompt()}
 
-${getRelatedQuestionsSpecPrompt()}
+${relatedQuestionsSpec(prefs)}
 `
 }
 

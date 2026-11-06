@@ -1,5 +1,6 @@
 import { UIMessage } from '@ai-sdk/react'
 
+import type { UserPromptPreferences } from '../agents/prompts/search-mode-prompts'
 import { Model } from '../types/models'
 import { SearchMode } from '../types/search'
 
@@ -14,4 +15,5 @@ export interface BaseStreamConfig {
   isNewChat?: boolean
   searchMode?: SearchMode
   onZeroPartError?: () => Promise<void>
+  userPreferences?: UserPromptPreferences
 }

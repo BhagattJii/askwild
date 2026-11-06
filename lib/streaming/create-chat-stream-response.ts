@@ -81,7 +81,8 @@ export async function createChatStreamResponse(
     abortSignal,
     isNewChat,
     searchMode,
-    onZeroPartError
+    onZeroPartError,
+    userPreferences
   } = config
 
   // Verify that chatId is provided
@@ -232,7 +233,8 @@ export async function createChatStreamResponse(
         chatId,
         searchMode,
         citationLabelSeed: nextCitationLabelNumber(messagesToModel),
-        currentDraft
+        currentDraft,
+        userPreferences
       })
 
       streamErrorStage = 'transform-messages'

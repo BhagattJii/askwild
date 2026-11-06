@@ -19,7 +19,8 @@ import { isTracingEnabled } from '../utils/telemetry'
 
 import {
   getAdaptiveModePrompt,
-  QUICK_MODE_PROMPT
+  getQuickModePrompt,
+  type UserPromptPreferences
 } from './prompts/search-mode-prompts'
 
 // Enhanced wrapper function with better type safety and streaming support
@@ -79,7 +80,8 @@ export function createResearcher({
   chatId,
   searchMode = 'adaptive',
   citationLabelSeed,
-  currentDraft = null
+  currentDraft = null,
+  userPreferences
 }: {
   model: string
   modelConfig?: Model
@@ -87,6 +89,7 @@ export function createResearcher({
   searchMode?: SearchMode
   citationLabelSeed?: number
   currentDraft?: DraftVersion | null
+  userPreferences?: UserPromptPreferences
 }) {
   try {
     // Date only: a second-precision timestamp sits at the head of the prompt
@@ -120,7 +123,7 @@ export function createResearcher({
         console.log(
           '[Researcher] Quick mode: maxSteps=20, tools=[search, fetch, editDraft]'
         )
-        systemPrompt = QUICK_MODE_PROMPT
+        systemPrompt = getQuickModePrompt(userPreferences)
         activeToolsList = ['search', 'fetch', 'editDraft']
         maxSteps = 20
         searchTool = wrapSearchToolForQuickMode(originalSearchTool)
@@ -128,7 +131,7 @@ export function createResearcher({
 
       case 'adaptive':
       default:
-        systemPrompt = getAdaptiveModePrompt()
+        systemPrompt = getAdaptiveModePrompt(userPreferences)
         activeToolsList = ['search', 'fetch', 'todoWrite', 'editDraft']
         console.log(
           `[Researcher] Adaptive mode: maxSteps=50, tools=[${activeToolsList.join(', ')}]`
