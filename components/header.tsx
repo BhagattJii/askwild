@@ -1,8 +1,12 @@
 'use client'
 
 import React from 'react'
+import { useRouter } from 'next/navigation'
+
+import { IconMessageCirclePlus as MessageCirclePlus } from '@tabler/icons-react'
 
 import type { AppUser } from '@/lib/auth/types'
+import { SHORTCUT_EVENTS } from '@/lib/keyboard-shortcuts'
 import { cn } from '@/lib/utils'
 
 import { useSidebar } from '@/components/ui/sidebar'
@@ -15,6 +19,14 @@ interface HeaderProps {
 
 export const Header: React.FC<HeaderProps> = ({ user }) => {
   const { open } = useSidebar()
+  const router = useRouter()
+
+  const startNewChat = () => {
+    window.dispatchEvent(
+      new CustomEvent(SHORTCUT_EVENTS.newChat, { cancelable: true })
+    )
+    router.push('/')
+  }
 
   return (
     <header
@@ -28,6 +40,15 @@ export const Header: React.FC<HeaderProps> = ({ user }) => {
       <div></div>
 
       <div className="flex items-center gap-2">
+        <button
+          type="button"
+          onClick={startNewChat}
+          aria-label="New chat"
+          title="New chat (Ctrl+Shift+O)"
+          className="inline-flex size-9 items-center justify-center rounded-lg border border-muted bg-background/90 text-muted-foreground shadow-none transition-colors hover:bg-muted hover:text-foreground"
+        >
+          <MessageCirclePlus className="size-5" />
+        </button>
         {user ? null : <GuestMenu />}
       </div>
     </header>

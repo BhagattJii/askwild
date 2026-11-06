@@ -17,7 +17,6 @@ import {
   IconChevronDown as ChevronDown,
   IconFileText as FileText,
   IconLibrary as LibraryIcon,
-  IconMessageCirclePlus as MessageCirclePlus,
   IconPaperclip as Paperclip,
   IconPlus as Plus,
   IconSquare as Square,
@@ -64,6 +63,7 @@ import { MessageNavigationDots } from './message-navigation-dots'
 import { ModelSelectorClient } from './model-selector-client'
 import { SearchModeSelector } from './search-mode-selector'
 import { UploadedFileList } from './uploaded-file-list'
+import { VoiceInputButton } from './voice-input-button'
 
 // Constants for timing delays
 const INPUT_UPDATE_DELAY_MS = 10 // Delay to ensure input value is updated before form submission
@@ -112,6 +112,8 @@ interface ChatPanelProps {
   isCloudDeployment?: boolean
   onAdaptiveModeAuthRequired?: () => void
   modelSelectorData?: ModelSelectorData
+  /** Called with voice-transcribed text from the mic button. */
+  onTranscript?: (text: string) => void
   /** Chat sections for message navigation dots */
   sections?: { id: string; userMessage: UIMessage }[]
 }
@@ -142,6 +144,7 @@ export function ChatPanel({
   isCloudDeployment = false,
   onAdaptiveModeAuthRequired,
   modelSelectorData,
+  onTranscript,
   sections = []
 }: ChatPanelProps) {
   const router = useRouter()
@@ -220,6 +223,14 @@ export function ChatPanel({
     onNewChat?.()
     router.push('/')
   }, [setMessages, closeArtifact, onNewChat, router])
+
+  const handleVoiceTranscript = useCallback(
+    (text: string) => {
+      onTranscript?.(text)
+      inputRef.current?.focus()
+    },
+    [onTranscript]
+  )
 
   // Listen for keyboard shortcut events
   // Uses defaultPrevented to prevent duplicate handling
@@ -935,18 +946,10 @@ export function ChatPanel({
                   onLockedModelClick={onAdaptiveModeAuthRequired}
                 />
               )}
-              {messages.length > 0 && (
-                <Button
-                  variant="outline"
-                  size="icon"
-                  onClick={handleNewChat}
-                  className="shrink-0 size-8 md:size-10 rounded-full group"
-                  type="button"
-                  disabled={isLoading}
-                >
-                  <MessageCirclePlus className="size-4 transition-transform duration-[140ms] ease-[var(--motion-ease-out)] group-hover:rotate-12" />
-                </Button>
-              )}
+              <VoiceInputButton
+                onTranscript={handleVoiceTranscript}
+                disabled={disabled || isLoading || isToolInvocationInProgress()}
+              />
               <Button
                 type={isLoading ? 'button' : 'submit'}
                 size={'icon'}

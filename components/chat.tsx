@@ -402,6 +402,17 @@ export function Chat({
     setInput(e.target.value)
   }
 
+  const appendVoiceTranscript = useCallback((text: string) => {
+    const trimmed = text.trim()
+    if (!trimmed) {
+      return
+    }
+    setInput(current => {
+      const base = current.trimEnd()
+      return base ? `${base} ${trimmed}` : trimmed
+    })
+  }, [setInput])
+
   const handleQuoteContext = useCallback(
     (text: string) => {
       const trimmed = text.trim()
@@ -837,6 +848,7 @@ export function Chat({
           isCloudDeployment={isCloudDeployment}
           onAdaptiveModeAuthRequired={showAdaptiveModeAuthModal}
           modelSelectorData={modelSelectorData}
+          onTranscript={appendVoiceTranscript}
           sections={sections}
         />
         <DragOverlay visible={dragHandlers.isDragging} />
