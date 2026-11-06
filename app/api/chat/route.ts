@@ -10,6 +10,8 @@ import {
 } from '@/lib/analytics'
 import { getCurrentUser, getCurrentUserId } from '@/lib/auth/get-current-user'
 import { isAnonymousMode } from '@/lib/auth/provider'
+import { isCloudDeployment } from '@/lib/config/load-models-config'
+import { selectCatalogModel } from '@/lib/config/model-catalog'
 import { getUserMessageIds } from '@/lib/db/actions'
 import { generateId } from '@/lib/db/schema'
 import { checkAndEnforceAdaptiveLimit } from '@/lib/rate-limit/adaptive-limit'
@@ -232,7 +234,9 @@ export async function POST(req: Request) {
       )
     }
 
-    const selectedModel = await selectModel({ searchMode, cookieStore })
+    const selectedModel = isCloudDeployment()
+      ? selectCatalogModel({ cookieStore, isGuest })
+      : await selectModel({ searchMode, cookieStore })
 
     if (!selectedModel) {
       return new Response('No enabled model is available', {

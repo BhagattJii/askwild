@@ -1,6 +1,13 @@
 import { cookies } from 'next/headers'
 
 import { DEFAULT_MODEL } from '@/lib/config/default-model'
+import { isCloudDeployment } from '@/lib/config/load-models-config'
+import {
+  getDefaultGuestSignedInModel,
+  getGuestLockedModelKeys,
+  getGuestModel,
+  getModelCatalog
+} from '@/lib/config/model-catalog'
 import {
   MODEL_SELECTION_COOKIE,
   parseModelSelectionCookie
@@ -58,13 +65,36 @@ function resolveSelectedModelKey(
       : ''
 }
 
-export async function getModelSelectorData(): Promise<ModelSelectorData> {
-  if (process.env.ASKWILD_CLOUD_DEPLOYMENT === 'true') {
+export async function getModelSelectorData({
+  isGuest = false
+}: { isGuest?: boolean } = {}): Promise<ModelSelectorData> {
+  if (isCloudDeployment()) {
+    const catalog = getModelCatalog()
+    const smallKey = modelKey(getGuestModel())
+    const largeKey = modelKey(getDefaultGuestSignedInModel())
+    const modelsByProvider: Record<string, Model[]> = {
+      'openai-compatible': catalog
+    }
+    const cookieStore = await cookies()
+    const parsedCookie = parseModelSelectionCookie(
+      cookieStore.get(MODEL_SELECTION_COOKIE)?.value
+    )
+    const matchedKey =
+      parsedCookie &&
+      catalog.some(
+        model =>
+          model.id === parsedCookie.modelId &&
+          model.providerId === parsedCookie.providerId
+      )
+        ? `${parsedCookie.providerId}:${parsedCookie.modelId}`
+        : undefined
+
     return {
-      enabled: false,
-      modelsByProvider: {},
-      selectedModelKey: '',
-      hasAvailableModels: false
+      enabled: true,
+      modelsByProvider,
+      selectedModelKey: isGuest ? smallKey : (matchedKey ?? largeKey),
+      hasAvailableModels: catalog.length > 0,
+      guestLockedKeys: getGuestLockedModelKeys()
     }
   }
 
