@@ -52,12 +52,12 @@ const accountLinks = [
   {
     icon: User,
     label: 'My Account',
-    href: '/settings#account'
+    href: '/settings?tab=account'
   },
   {
     icon: Adjustments,
     label: 'Preferences',
-    href: '/settings#preferences'
+    href: '/settings?tab=preferences'
   }
 ]
 

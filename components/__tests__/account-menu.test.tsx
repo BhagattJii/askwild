@@ -81,11 +81,11 @@ describe('AccountMenu', () => {
     openMenu()
 
     fireEvent.click(screen.getByRole('button', { name: /My Account/ }))
-    expect(mockPush).toHaveBeenCalledWith('/settings#account')
+    expect(mockPush).toHaveBeenCalledWith('/settings?tab=account')
 
     fireEvent.click(screen.getByRole('button', { name: 'Open profile' }))
     fireEvent.click(screen.getByRole('button', { name: /Preferences/ }))
-    expect(mockPush).toHaveBeenCalledWith('/settings#preferences')
+    expect(mockPush).toHaveBeenCalledWith('/settings?tab=preferences')
 
     fireEvent.click(screen.getByRole('button', { name: 'Open profile' }))
     fireEvent.click(screen.getByRole('link', { name: /Help Center/ }))

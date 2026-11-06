@@ -1,5 +1,6 @@
 'use client'
 
+import { useState } from 'react'
 import Link from 'next/link'
 
 import { IconArrowLeft as ArrowLeft } from '@tabler/icons-react'
@@ -9,10 +10,30 @@ import { useAuthCapabilities } from '@/lib/contexts/app-user-context'
 import type { Preferences } from '@/lib/preferences/shared'
 import { cn } from '@/lib/utils'
 
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
+import {
+  Avatar,
+  AvatarFallback,
+  AvatarImage
+} from '@/components/ui/avatar'
+import { Button } from '@/components/ui/button'
 
-import { DeleteAccountButton } from '@/components/settings/delete-account-button'
-import { PreferencesEditor } from '@/components/settings/preferences-editor'
+import {
+  DeleteAccountButton
+} from '@/components/settings/delete-account-button'
+import {
+  PersonalizePanel,
+  PreferencesPanel
+} from '@/components/settings/preferences-editor'
+
+const tabs = [
+  { id: 'account', label: 'My Account' },
+  { id: 'preferences', label: 'Preferences' },
+  { id: 'personalize', label: 'Personalize' }
+] as const
+
+type TabId = (typeof tabs)[number]['id']
+
+export type { TabId }
 
 function getInitials(name: string, email: string | null | undefined): string {
   if (name && name !== 'User') {
@@ -31,19 +52,27 @@ function getInitials(name: string, email: string | null | undefined): string {
 interface SettingsViewProps {
   user: AppUser | null
   initialPreferences: Preferences
+  initialTab?: TabId
 }
 
 export function SettingsView({
   user,
-  initialPreferences
+  initialPreferences,
+  initialTab = 'account'
 }: SettingsViewProps) {
   const capabilities = useAuthCapabilities()
-  const userName = user?.name || 'User'
-  const avatarUrl = user?.image ?? undefined
+  const [tab, setTab] = useState<TabId>(initialTab)
+
+  const selectTab = (id: TabId) => {
+    setTab(id)
+    window.history.replaceState(null, '', `?tab=${id}`)
+  }
+
+  const activeTab = tabs.find(item => item.id === tab) ?? tabs[0]
 
   return (
     <div className="min-h-svh bg-background">
-      <main className="mx-auto w-full max-w-2xl px-4 pb-16 pt-6 sm:px-6 md:pt-10">
+      <main className="mx-auto w-full max-w-4xl px-4 pb-16 pt-6 sm:px-6 md:pt-10">
         <Link
           href="/"
           className="inline-flex items-center gap-2 text-sm text-muted-foreground transition-colors hover:text-foreground"
@@ -54,77 +83,145 @@ export function SettingsView({
 
         <h1 className="mt-4 text-2xl font-semibold tracking-tight">Settings</h1>
 
-        {user && (
-          <section
-            id="account"
-            aria-labelledby="account-heading"
-            className="mt-6 scroll-mt-6 rounded-2xl border bg-card p-5 sm:p-6"
+        <div className="mt-6 flex flex-col gap-6 md:flex-row md:gap-10">
+          <nav
+            aria-label="Settings categories"
+            className="overflow-x-auto md:w-48 md:shrink-0"
           >
-            <p
-              id="account-heading"
-              className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground"
+            <ul className="flex gap-2 md:flex-col md:gap-1">
+              {tabs.map(item => {
+                const selected = item.id === activeTab.id
+                return (
+                  <li key={item.id}>
+                    <a
+                      href={`#${item.id}`}
+                      aria-current={selected ? 'page' : undefined}
+                      onClick={event => {
+                        event.preventDefault()
+                        selectTab(item.id)
+                      }}
+                      className={cn(
+                        'block whitespace-nowrap rounded-lg px-3 py-2 text-sm transition-colors',
+                        selected
+                          ? 'bg-muted font-medium text-foreground'
+                          : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground'
+                      )}
+                    >
+                      {item.label}
+                    </a>
+                  </li>
+                )
+              })}
+            </ul>
+          </nav>
+
+          <section
+            key={activeTab.id}
+            aria-labelledby="settings-panel-heading"
+            className="min-w-0 flex-1"
+          >
+            <h2
+              id="settings-panel-heading"
+              className="pb-3 text-lg font-semibold tracking-tight"
             >
-              Account
-            </p>
-            <div className="mt-4 flex items-center gap-4">
-              <Avatar className="size-16 shrink-0">
-                <AvatarImage src={avatarUrl} alt={userName} />
-                <AvatarFallback className="text-lg font-medium">
-                  {getInitials(userName, user.email)}
-                </AvatarFallback>
-              </Avatar>
-              <div className="min-w-0">
-                <p className="truncate text-base font-medium leading-tight">
-                  {userName}
-                </p>
-                <p className="mt-1 truncate text-sm text-muted-foreground">
-                  {user.email}
-                </p>
+              {activeTab.label}
+            </h2>
+
+            {activeTab.id === 'account' && user && (
+              <div className="divide-y border-t">
+                <div className="flex items-center gap-4 py-5">
+                  <Avatar className="size-14 shrink-0">
+                    <AvatarImage src={user.image ?? undefined} alt={user.name || user.email || 'User'} />
+                    <AvatarFallback className="font-medium">
+                      {getInitials(user.name || 'User', user.email)}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div className="min-w-0">
+                    <p className="truncate text-[15px] font-medium leading-tight">
+                      {user.name || 'User'}
+                    </p>
+                    {user.email && (
+                      <p className="mt-0.5 truncate text-sm text-muted-foreground">
+                        {user.email}
+                      </p>
+                    )}
+                  </div>
+                </div>
+
+                {user.name && (
+                  <div className="flex items-center justify-between gap-6 py-5">
+                    <p className="text-sm font-medium">Full name</p>
+                    <p className="truncate text-sm text-muted-foreground">
+                      {user.name}
+                    </p>
+                  </div>
+                )}
+
+                <div className="flex items-center justify-between gap-6 py-5">
+                  <p className="text-sm font-medium">Email</p>
+                  <p className="truncate text-sm text-muted-foreground">
+                    {user.email}
+                  </p>
+                </div>
+
+                {capabilities.deleteUser && (
+                  <div className="flex flex-col gap-3 py-5 sm:flex-row sm:items-center sm:justify-between sm:gap-6">
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium">Delete account</p>
+                      <p className="mt-1 text-sm text-muted-foreground">
+                        Permanently remove your account, chats, and files.
+                        This action cannot be undone.
+                      </p>
+                    </div>
+                    <div className="shrink-0">
+                      <DeleteAccountButton />
+                    </div>
+                  </div>
+                )}
               </div>
-            </div>
-          </section>
-        )}
+            )}
 
+            {activeTab.id === 'account' && !user && (
+              <div className="border-t pt-5">
+                <p className="text-sm text-muted-foreground">
+                  You are browsing without an account. Sign in to sync
+                  Askwild across devices.
+                </p>
+                <Button asChild className="mt-3">
+                  <Link href="/auth/login">Sign in</Link>
+                </Button>
+              </div>
+            )}
 
-        {user ? (
-          <PreferencesEditor initial={initialPreferences} />
-        ) : (
-          <section className="mt-6 rounded-2xl border bg-card p-5 sm:p-6">
-            <p className="text-sm font-medium">Preferences</p>
-            <p className="mt-1 text-xs text-muted-foreground">
-              Sign in to choose how Askwild answers you.
-            </p>
-            <Link
-              href="/auth/login"
-              className="mt-3 inline-flex h-9 items-center gap-2 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
-            >
-              Sign in
-            </Link>
-          </section>
-        )}
+            {activeTab.id === 'preferences' &&
+              (user ? (
+                <PreferencesPanel initial={initialPreferences} />
+              ) : (
+                <div className="border-t pt-5">
+                  <p className="text-sm text-muted-foreground">
+                    Sign in to choose how Askwild answers you.
+                  </p>
+                  <Button asChild className="mt-3">
+                    <Link href="/auth/login">Sign in</Link>
+                  </Button>
+                </div>
+              ))}
 
-        {user && capabilities.deleteUser && (
-          <section
-            id="danger-zone"
-            aria-labelledby="danger-zone-heading"
-            className="mt-6 scroll-mt-6 rounded-2xl border border-destructive/40 bg-destructive/5 p-5 sm:p-6"
-          >
-            <p
-              id="danger-zone-heading"
-              className="text-[11px] font-medium uppercase tracking-wider text-destructive"
-            >
-              Danger zone
-            </p>
-            <p className="mt-3 text-sm font-medium">Delete account</p>
-            <p className="mt-1 text-xs text-muted-foreground">
-              Permanently delete your account, chat history, and uploaded
-              files. This action cannot be undone.
-            </p>
-            <div className="mt-4">
-              <DeleteAccountButton />
-            </div>
+            {activeTab.id === 'personalize' &&
+              (user ? (
+                <PersonalizePanel initial={initialPreferences} />
+              ) : (
+                <div className="border-t pt-5">
+                  <p className="text-sm text-muted-foreground">
+                    Sign in to personalize your answers.
+                  </p>
+                  <Button asChild className="mt-3">
+                    <Link href="/auth/login">Sign in</Link>
+                  </Button>
+                </div>
+              ))}
           </section>
-        )}
+        </div>
       </main>
     </div>
   )
