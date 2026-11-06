@@ -253,11 +253,17 @@ export function createNewsSearchTool() {
         .min(1)
         .max(200)
         .describe('News topic, e.g. "India budget"'),
-      maxResults: z.number().int().min(1).max(10).default(6)
+      maxResults: z.number().int().min(1).max(10).default(6),
+      when: z
+        .enum(['1h', '1d', '7d', 'all'])
+        .default('all')
+        .describe('Restrict results to this window (all = no restriction)')
     }),
-    async execute({ query, maxResults }) {
+    async execute({ query, maxResults, when }) {
       try {
-        const url = `https://news.google.com/rss/search?q=${encodeURIComponent(query.trim())}&hl=en-IN&gl=IN&ceid=IN:en`
+        const q =
+          when === 'all' ? query.trim() : `${query.trim()} when:${when}`
+        const url = `https://news.google.com/rss/search?q=${encodeURIComponent(q)}&hl=en-IN&gl=IN&ceid=IN:en`
         const response = await fetch(url, {
           headers: { 'User-Agent': 'Askwild/1.0 (free AI search)' },
           signal: AbortSignal.timeout(FAST_TIMEOUT_MS)
