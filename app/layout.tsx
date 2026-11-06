@@ -1,7 +1,6 @@
 import type { Metadata, Viewport } from 'next'
 import { Inter as FontSans } from 'next/font/google'
 
-import { ClerkProvider } from '@clerk/nextjs'
 import { Analytics } from '@vercel/analytics/next'
 
 import { getCurrentUser } from '@/lib/auth/get-current-user'
@@ -66,20 +65,6 @@ export const viewport: Viewport = {
  * throws without a publishable key, so better-auth/anonymous deployments
  * must keep their previous provider-less tree.
  */
-function ClerkGate({
-  enabled,
-  children
-}: Readonly<{ enabled: boolean; children: React.ReactNode }>) {
-  if (!enabled) {
-    return <>{children}</>
-  }
-  return (
-    <ClerkProvider dynamic signInUrl="/auth/login" signUpUrl="/auth/login">
-      {children}
-    </ClerkProvider>
-  )
-}
-
 export default async function RootLayout({
   children
 }: Readonly<{
@@ -97,7 +82,6 @@ export default async function RootLayout({
   )
 
   const userId = user?.id
-  const clerkEnabled = process.env.AUTH_PROVIDER === 'clerk'
   const isCloudDeployment = process.env.ASKWILD_CLOUD_DEPLOYMENT === 'true'
   const usageBudgetEnabled = Boolean(
     user &&
@@ -139,7 +123,6 @@ export default async function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
-          <ClerkGate enabled={clerkEnabled}>
           <PostHogProvider userId={user?.id ?? null}>
             <AppUserProvider user={user} capabilities={capabilities}>
               <UserProvider hasUser={!!userId}>
@@ -164,7 +147,6 @@ export default async function RootLayout({
               </UserProvider>
             </AppUserProvider>
           </PostHogProvider>
-          </ClerkGate>
           <Toaster />
           {isCloudDeployment && <Analytics />}
         </ThemeProvider>
