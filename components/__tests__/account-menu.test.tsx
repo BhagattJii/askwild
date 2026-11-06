@@ -1,12 +1,17 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { deleteAccount } from '@/lib/actions/account'
 import { signOut } from '@/lib/actions/auth'
 import type { AppUser } from '@/lib/auth/types'
 import { chatStore } from '@/lib/chat-store'
 import { AppUserProvider } from '@/lib/contexts/app-user-context'
 
 import { AccountMenu } from '@/components/account-menu'
+
+vi.mock('@/lib/actions/account', () => ({
+  deleteAccount: vi.fn()
+}))
 
 vi.mock('@/lib/actions/auth', () => ({
   signOut: vi.fn()
@@ -75,6 +80,43 @@ describe('AccountMenu', () => {
     expect(
       screen.getByRole('link', { name: /Help Center/ })
     ).toHaveAttribute('href', 'https://github.com/BhagattJii/askwild/issues')
+    expect(
+      screen.getByRole('button', { name: /Delete account/ })
+    ).toBeInTheDocument()
+  })
+
+  it('hides delete account when the provider does not support it', () => {
+    openMenu({ deleteUser: false })
+
+    expect(
+      screen.queryByRole('button', { name: /Delete account/ })
+    ).not.toBeInTheDocument()
+  })
+
+  it('deletes the account after confirmation from the menu', async () => {
+    vi.mocked(deleteAccount).mockResolvedValue({ success: true })
+    vi.mocked(signOut).mockResolvedValue({ success: true })
+    openMenu()
+
+    chatStore.getOrCreate('cached', { messages: [] })
+
+    fireEvent.click(screen.getByRole('button', { name: /Delete account/ }))
+    expect(
+      screen.getByText('Delete your account?')
+    ).toBeInTheDocument()
+
+    const confirmButtons = screen.getAllByRole('button', {
+      name: /Delete account/
+    })
+    fireEvent.click(confirmButtons.at(-1)!)
+
+    await waitFor(() => {
+      expect(deleteAccount).toHaveBeenCalledTimes(1)
+      expect(signOut).toHaveBeenCalledTimes(1)
+      expect(chatStore.get('cached')).toBeUndefined()
+      expect(mockPush).toHaveBeenCalledWith('/')
+      expect(mockRefresh).toHaveBeenCalled()
+    })
   })
 
   it('navigates to the settings sections', () => {
