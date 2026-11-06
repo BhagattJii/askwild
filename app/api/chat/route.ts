@@ -25,6 +25,7 @@ import {
   ADAPTIVE_MODE_AUTH_REQUIRED_MESSAGE,
   isAdaptiveModeAuthBlocked
 } from '@/lib/search-mode-availability'
+import { getClientIp } from '@/lib/security/client-ip'
 import { createChatStreamResponse } from '@/lib/streaming/create-chat-stream-response'
 import { createEphemeralChatStreamResponse } from '@/lib/streaming/create-ephemeral-chat-stream-response'
 import { SearchMode } from '@/lib/types/search'
@@ -167,11 +168,7 @@ export async function POST(req: Request) {
     }
 
     if (isGuest && !isAdminViewer) {
-      const forwardedFor = req.headers.get('x-forwarded-for') || ''
-      const ip =
-        forwardedFor.split(',')[0]?.trim() ||
-        req.headers.get('x-real-ip') ||
-        null
+      const ip = await getClientIp()
       const guestLimitResponse = await checkAndEnforceGuestLimit(ip)
       if (guestLimitResponse) return guestLimitResponse
     }

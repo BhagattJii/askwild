@@ -152,7 +152,12 @@ export function createSearchTool(
 
           const response = await fetch(`${baseUrl}/api/advanced-search`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: {
+              'Content-Type': 'application/json',
+              ...(process.env.INTERNAL_API_TOKEN
+                ? { 'x-askwild-internal': process.env.INTERNAL_API_TOKEN }
+                : {})
+            },
             body: JSON.stringify({
               query: filledQuery,
               maxResults: effectiveMaxResults,
