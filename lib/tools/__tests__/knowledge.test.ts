@@ -1,0 +1,220 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
+import {
+  createAcademicSearchTool,
+  createCurrencyTool,
+  createNewsSearchTool,
+  createStockQuoteTool,
+  createWeatherTool,
+  createWikiSummaryTool
+} from '@/lib/tools/knowledge'
+
+const originalFetch = globalThis.fetch
+const fetchMock = vi.fn()
+
+function jsonResponse(data: unknown): Response {
+  return new Response(JSON.stringify(data), {
+    status: 200,
+    headers: { 'Content-Type': 'application/json' }
+  })
+}
+
+function textResponse(data: string): Response {
+  return new Response(data, {
+    status: 200,
+    headers: { 'Content-Type': 'application/rss+xml' }
+  })
+}
+
+function toolCall(tool: object, args: object): Promise<any> {
+  const t = tool as any
+  return t.execute(args)
+}
+
+beforeEach(() => {
+  fetchMock.mockReset()
+  globalThis.fetch = fetchMock
+})
+
+afterEach(() => {
+  globalThis.fetch = originalFetch
+})
+
+describe('dynamic__wikiSummary', () => {
+  it('returns the extract and url for a known topic', async () => {
+    fetchMock.mockResolvedValue(
+      jsonResponse({
+        title: 'India',
+        description: 'Country in South Asia',
+        extract: 'India is a country...',
+        content_urls: { desktop: { page: 'https://en.wikipedia.org/wiki/India' } }
+      })
+    )
+
+    const result = await toolCall(createWikiSummaryTool(), { topic: 'India' })
+
+    expect(result.found).toBe(true)
+    expect(result.title).toBe('India')
+    expect(result.url).toBe('https://en.wikipedia.org/wiki/India')
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('fails soft when the topic is unknown', async () => {
+    fetchMock.mockResolvedValue(new Response('not found', { status: 404 }))
+
+    const result = await toolCall(createWikiSummaryTool(), {
+      topic: 'xyzzy-no-such-topic-123'
+    })
+
+    expect(result.found).toBe(false)
+  })
+})
+
+describe('dynamic__weather', () => {
+  it('geocodes the city and returns current + forecast', async () => {
+    fetchMock
+      .mockResolvedValueOnce(
+        jsonResponse({
+          results: [
+            {
+              name: 'Mumbai',
+              latitude: 19.07,
+              longitude: 72.88,
+              country_code: 'IN'
+            }
+          ]
+        })
+      )
+      .mockResolvedValueOnce(
+        jsonResponse({
+          current_weather: { temperature: 31, windspeed: 14, weathercode: 2 },
+          daily: {
+            time: ['2026-11-06', '2026-11-07', '2026-11-08'],
+            temperature_2m_max: [33, 34, 33],
+            temperature_2m_min: [25, 26, 25],
+            weathercode: [1, 61, 3],
+            precipitation_probability_max: [10, 80, 20]
+          }
+        })
+      )
+
+    const result = await toolCall(createWeatherTool(), { city: 'mumbai' })
+
+    expect(result.found).toBe(true)
+    expect(result.city).toBe('Mumbai')
+    expect(result.current.temperatureC).toBe(31)
+    expect(result.forecast).toHaveLength(3)
+    expect(result.forecast[1].condition).toBe('Rain')
+  })
+})
+
+describe('dynamic__currencyRate', () => {
+  it('returns converted amount and rate', async () => {
+    fetchMock.mockResolvedValue(
+      jsonResponse({ date: '2026-11-05', rates: { INR: 94.48 } })
+    )
+
+    const result = await toolCall(createCurrencyTool(), {
+      from: 'usd',
+      to: 'inr',
+      amount: 10
+    })
+
+    expect(result.ok).toBe(true)
+    expect(result.converted).toBeCloseTo(94.48, 2)
+    expect(result.rate).toBeCloseTo(9.448, 2)
+  })
+
+  it('fails soft on unsupported currency', async () => {
+    fetchMock.mockRejectedValue(new Error('HTTP 422'))
+
+    const result = await toolCall(createCurrencyTool(), {
+      from: 'USD',
+      to: 'XXX',
+      amount: 1
+    })
+
+    expect(result.ok).toBe(false)
+  })
+})
+
+describe('dynamic__stockQuote', () => {
+  it('returns price and daily change', async () => {
+    fetchMock.mockResolvedValue(
+      jsonResponse({
+        chart: {
+          result: [
+            {
+              meta: {
+                symbol: '^NSEI',
+                currency: 'INR',
+                exchangeName: 'NSI',
+                regularMarketPrice: 24550.3,
+                previousClose: 24480.1,
+                regularMarketTime: 1793943032
+              }
+            }
+          ]
+        }
+      })
+    )
+
+    const result = await toolCall(createStockQuoteTool(), { symbol: '^NSEI' })
+
+    expect(result.found).toBe(true)
+    expect(result.price).toBeCloseTo(24550.3)
+    expect(result.change).toBeCloseTo(70.2, 0)
+    expect(result.changePercent).toBeGreaterThan(0)
+  })
+})
+
+describe('dynamic__newsSearch', () => {
+  it('parses google news rss items', async () => {
+    fetchMock.mockResolvedValue(
+      textResponse(`<?xml version="1.0"?>
+<rss version="2.0"><channel><title>news</title>
+<item><title><![CDATA[Market rallies on policy hopes]]></title><link>https://example.com/1</link><pubDate>Thu, 05 Nov 2026 10:00:00 GMT</pubDate><source url="https://example.com">Example News</source></item>
+<item><title>Plain title story</title><link>https://example.com/2</link><pubDate>Thu, 05 Nov 2026 09:00:00 GMT</pubDate></item>
+</channel></rss>`)
+    )
+
+    const result = await toolCall(createNewsSearchTool(), {
+      query: 'india markets',
+      maxResults: 5
+    })
+
+    expect(result.ok).toBe(true)
+    expect(result.items).toHaveLength(2)
+    expect(result.items[0].title).toBe('Market rallies on policy hopes')
+    expect(result.items[0].source).toBe('Example News')
+  })
+})
+
+describe('dynamic__academicSearch', () => {
+  it('parses arxiv atom entries', async () => {
+    fetchMock.mockResolvedValue(
+      textResponse(`<?xml version='1.0' encoding='UTF-8'?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+<entry>
+  <id>http://arxiv.org/abs/2604.12345v1</id>
+  <title>Quantum Error Correction at Scale</title>
+  <summary>We present a new surface code scheme that\n          reduces overhead.</summary>
+  <published>2026-10-30T00:00:00Z</published>
+  <author><name>Alice Researcher</name></author>
+  <author><name>Bob Scientist</name></author>
+</entry>
+</feed>`)
+    )
+
+    const result = await toolCall(createAcademicSearchTool(), {
+      query: 'quantum error correction',
+      maxResults: 1
+    })
+
+    expect(result.ok).toBe(true)
+    expect(result.papers).toHaveLength(1)
+    expect(result.papers[0].title).toBe('Quantum Error Correction at Scale')
+    expect(result.papers[0].link).toBe('https://arxiv.org/abs/2604.12345v1')
+    expect(result.papers[0].authors).toContain('Alice Researcher')
+  })
+})
