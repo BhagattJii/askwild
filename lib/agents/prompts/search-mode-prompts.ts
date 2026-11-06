@@ -165,6 +165,10 @@ Search tool usage:
 - In the single search call, set type="optimized", search_depth="basic", and max_results=10
 - This provides faster responses without needing additional fetch operations
 - Rely on the search results' content snippets for your answers
+- Query reformulation (MANDATORY): never send the raw user message as the query — rewrite to a 4-7 word exact-keyword phrase
+  - Keep names exact, drop filler words, and append the country/topic if the query implies India or your nation of context (e.g. "Union Budget 2026 India income tax" not "union budget 2026")
+  - Ambiguous terms: disambiguate with a qualifier before searching (e.g. "parliament budget", not "union"; "India election results", not "election")
+  - If the first search returns irrelevant results (e.g. results for the wrong country or wrong sense of the word), retry ONCE with a tightened query — never answer from the wrong results
 ${hasGeneralProvider ? '- For video/image content, you can use type="general" with appropriate content_types' : '- Note: Video/image search requires a dedicated general search provider (not available)'}
 
 ${getSourceDirectionGuidance(false)}
@@ -340,6 +344,10 @@ ${getApproachStrategy()}
 TOOL USAGE GUIDELINES:
 
 Search tool usage - UNDERSTAND THE DIFFERENCE:
+- Query reformulation (MANDATORY): never send the raw user message as the query — rewrite to a 4-7 word exact-keyword phrase
+  - Keep names exact, drop filler words, and add a qualifier for Indian / country-specific topics (e.g. "Union Budget 2026 India income tax" not "union budget")
+  - Ambiguous terms (Union, Budget, Polity): disambiguate with an extra qualifier before searching ("parliament budget", "India election")
+  - If the first search returns irrelevant results (wrong country, wrong sense of the word), retry ONCE with tighter keywords — never answer from wrong results
 - **type="optimized" (DEFAULT for most queries):**
   - Returns search results WITH content snippets extracted
   - Best for: Research questions, fact-finding, explanatory queries
