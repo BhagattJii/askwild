@@ -28,6 +28,74 @@ function assertFetchableUrl(url: string): void {
   }
 }
 
+/** Extract up to `limit` high-quality image URLs from an HTML string.
+ *  Prefers og:image/twitter:image (editorial choices, not logos),falls back
+ *  to large-looking <img> candidates never introduced. */
+function extractImages(html: string, limit = 6): string[] {
+  const found: string[] = []
+  const seen = new Set<string>()
+
+  const metaTag = /<meta\b[^>]*>/gi
+  for (const tagMatch of html.matchAll(metaTag)) {
+    const tag = tagMatch[0]
+    if (!/(og:image|twitter:image)/i.test(tag)) {
+      continue
+    }
+    const content = tag.match(/content\s*=\s*["']([^"']+)["']/i)
+    const value = content?.[1]
+    if (value) {
+      addImage(value)
+    }
+    if (found.length >= limit) return found
+  }
+
+  // Markdown image syntax from crawled markdown: ![alt](https://...)
+  if (found.length < limit) {
+    const mdImg = /!\[[^\]]*\]\(\s*(https?:\/\/[^\s)]+)/g
+    for (const match of html.matchAll(mdImg)) {
+      if (match[1]) addImage(match[1])
+      if (found.length >= limit) break
+    }
+  }
+
+  // Fallback: plain http <img src> candidates, largest-looking first.
+  if (found.length < limit) {
+    const imgTag = /<img\b[^>]*>/gi
+    for (const img of html.matchAll(imgTag)) {
+      const src = img[0].match(/src\s*=\s*["']([^"']+)["']/i)?.[1]
+      if (src) addImage(src)
+      if (found.length >= limit) break
+    }
+  }
+
+  return found
+
+  function addImage(raw: string) {
+    const url = normalizeImageUrl(raw)
+    if (!url) return
+    if (seen.has(url)) return
+    seen.add(url)
+    found.push(url)
+  }
+}
+
+function normalizeImageUrl(raw: string): string | null {
+  const trimmed = raw
+    .trim()
+    .replace(/&amp;/g, '&')
+    .replace(/^\/\//, 'https://')
+  if (/^https?:\/\//i.test(trimmed)) {
+    // Drop common tracking/pixel-sized images.
+    if (/[\/_.-](1x1|pixel|spacer|blank|tracking)(\b|\.gif)/i.test(trimmed)) {
+      return null
+    }
+    return trimmed
+  }
+  return null
+}
+
+export const __private = { extractImages } // exported for tests
+
 async function fetchRegularData(url: string): Promise<SearchResultsType> {
   try {
     const controller = new AbortController()
@@ -66,6 +134,7 @@ async function fetchRegularData(url: string): Promise<SearchResultsType> {
     }
 
     const body = await response.text()
+    const pageImages = isHtmlContent ? extractImages(body) : []
 
     const titleMatch = isHtmlContent
       ? body.match(/<title[^>]*>([^<]*)<\/title>/i)
@@ -106,7 +175,7 @@ async function fetchRegularData(url: string): Promise<SearchResultsType> {
         }
       ],
       query: '',
-      images: []
+      images: pageImages
     }
   } catch (error) {
     if (error instanceof Error && error.name === 'AbortError') {
@@ -262,6 +331,7 @@ function crawl4aiSearchResults(
   const resultUrl = result.redirected_url || result.url || url
   // The crawler reports this URL, so it passes the same gate as any result.
   assertPublicUrl(resultUrl)
+  const markdownImages = extractImages(markdown, 6)
   const rawTitle = result.metadata?.title?.trim() || new URL(resultUrl).hostname
   const title =
     rawTitle.length > TITLE_CHARACTER_LIMIT
@@ -277,7 +347,7 @@ function crawl4aiSearchResults(
       }
     ],
     query: '',
-    images: []
+    images: markdownImages
   }
 }
 
