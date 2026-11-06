@@ -70,8 +70,8 @@ describe('AccountMenu', () => {
       screen.getByRole('button', { name: /My Account/ })
     ).toBeInTheDocument()
     expect(
-      screen.getByRole('button', { name: /Preferences/ })
-    ).toBeInTheDocument()
+      screen.queryByRole('button', { name: /Preferences/ })
+    ).not.toBeInTheDocument()
     expect(
       screen.getByRole('link', { name: /Help Center/ })
     ).toHaveAttribute('href', 'https://github.com/BhagattJii/askwild/issues')
@@ -82,10 +82,6 @@ describe('AccountMenu', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /My Account/ }))
     expect(mockPush).toHaveBeenCalledWith('/settings?tab=account')
-
-    fireEvent.click(screen.getByRole('button', { name: 'Open profile' }))
-    fireEvent.click(screen.getByRole('button', { name: /Preferences/ }))
-    expect(mockPush).toHaveBeenCalledWith('/settings?tab=preferences')
 
     fireEvent.click(screen.getByRole('button', { name: 'Open profile' }))
     fireEvent.click(screen.getByRole('link', { name: /Help Center/ }))
