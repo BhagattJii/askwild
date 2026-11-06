@@ -15,15 +15,15 @@ const options = [
     value: 'light',
     label: 'Bright',
     icon: Sun,
-    tile: 'bg-white',
-    tileText: 'text-zinc-900'
+    tile: 'bg-[#fbfbfb]',
+    tileText: 'text-[#0b2833]'
   },
   {
     value: 'dark',
     label: 'Dark',
     icon: Moon,
-    tile: 'bg-zinc-900',
-    tileText: 'text-zinc-100'
+    tile: 'bg-[#15171b]',
+    tileText: 'text-[#dbdee3]'
   }
 ] as const
 
