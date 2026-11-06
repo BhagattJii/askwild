@@ -4,7 +4,6 @@ import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 
 import {
-  IconAdjustments as Adjustments,
   IconChevronRight as ChevronRight,
   IconLifebuoy as Lifebuoy,
   IconLogout as LogOut,
@@ -53,11 +52,6 @@ const accountLinks = [
     icon: User,
     label: 'My Account',
     href: '/settings?tab=account'
-  },
-  {
-    icon: Adjustments,
-    label: 'Preferences',
-    href: '/settings?tab=preferences'
   }
 ]
 
