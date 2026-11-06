@@ -571,6 +571,8 @@ falls back to web search) — no keys or crashes.
 | `dynamic__academicSearch` | arXiv papers with abstracts and links |
 | `dynamic__cryptoPrice` | Live coin prices in INR/USD with 24h change (CoinGecko) |
 | `dynamic__commodity` | Gold/silver/crude oil futures, USD converted to INR (Yahoo Finance + Frankfurter) |
+| `dynamic__worldEvents` | Live USGS earthquakes (≥4.5) and NASA EONET active disasters (wildfires, storms, volcanoes) |
+| `dynamic__newsSearch(when='1h')` | Breaking news restricted to the last hour |
 
 The tools are registered in `lib/tools/knowledge.ts` and enabled for both
 `quick` and `adaptive` search modes. Add or remove them in

@@ -13,6 +13,7 @@ import { createKnowledgeTools } from '../tools/knowledge'
 import { createQuestionTool } from '../tools/question'
 import { createSearchTool } from '../tools/search'
 import { createTodoTools } from '../tools/todo'
+import { createWorldTools } from '../tools/world'
 import { SearchMode } from '../types/search'
 import { createCitationLabelAllocator } from '../utils/citation'
 import { getModel } from '../utils/registry'
@@ -112,7 +113,8 @@ export function createResearcher({
       'dynamic__newsSearch',
       'dynamic__academicSearch',
       'dynamic__cryptoPrice',
-      'dynamic__commodity'
+      'dynamic__commodity',
+      'dynamic__worldEvents'
     ] as Array<keyof ResearcherTools>
     const labelAllocator = createCitationLabelAllocator(citationLabelSeed)
     const originalSearchTool = createSearchTool(model, {
@@ -120,6 +122,7 @@ export function createResearcher({
     })
     const fetchTool = createFetchTool({ labelAllocator })
     const knowledgeTools = createKnowledgeTools()
+    const worldTools = createWorldTools()
     const askQuestionTool = createQuestionTool(model)
     const todoTools = createTodoTools()
     const draftTools = createDraftTools(currentDraft)
@@ -169,6 +172,7 @@ export function createResearcher({
       search: searchTool,
       fetch: fetchTool,
       ...knowledgeTools,
+      ...worldTools,
       askQuestion: askQuestionTool,
       ...todoTools,
       ...draftTools

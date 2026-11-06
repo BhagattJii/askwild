@@ -40,6 +40,9 @@ function getKnowledgeToolsGuidance(): string {
 - dynamic__academicSearch — for research papers and abstracts (arXiv)
 - dynamic__cryptoPrice — for Bitcoin/Ethereum/any coin price in INR and USD (CoinGecko)
 - dynamic__commodity — for gold/silver/crude oil prices (USD converted to INR)
+- dynamic__worldEvents — for "any disasters/quakes/happening now": live USGS earthquakes (magnitude ≥4.5) and NASA EONET active disasters, both no-latency free feeds. For breaking political/security news use newsSearch with when:'1h'
+- Tool coverage: these are the freshest possible public signals (minutes). If a question asks "what is happening right now anywhere in the world" and none of these apply, use news search with when:'1h' and/or search type general
+- Honesty: if a feed is unavailable or empty for the asked-about event class (e.g. a city unrest that hasn't reached any news feed yet), say so — never invent an event or a timestamp
 - For live data questions, call the matching tool before searching; answer with the live value and state the source.
 - If a tool returns found:false / ok:false, say the live value is unavailable and continue with web search — never invent numbers, never state a live value from memory.`
 }
