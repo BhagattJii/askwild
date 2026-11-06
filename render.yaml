@@ -1,0 +1,24 @@
+# askwild search service (OpenSERP) — free Google/Bing/DuckDuckGo engine.
+# Deploy from the Render dashboard:  New → Blueprint Instance → this repository
+# → it detects this file and creates a free "askwild-search" web service.
+# Then set OPENSERP_URL=https://askwild-search.onrender.com and
+# SEARCH_API=openserp in the Askwild Vercel environment.
+#
+# Free plan (Render "free"): sleeps after 15 minutes of inactivity and wakes
+# on the next request (first query can take 10-20s). 750 free hours/month.
+
+services:
+  - type: web
+    name: askwild-search
+    runtime: image
+    image: { url: karust/openserp:latest }
+    plan: free
+    region: singapore
+    dockerCommand: serve -a 0.0.0.0 -p 7070
+    envVars:
+      # Render routes public traffic to port 7070.
+      - key: PORT
+        value: 7070
+      # Logs stay lean on free tier; 1000 cached responses.
+      - key: OPENSERP_LOG_LEVEL
+        value: warn
