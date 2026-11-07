@@ -775,3 +775,11 @@ ASKWILD_ADMIN_EMAILS=ops@example.com,me@example.com
 ```
 
 The update link is shown to administrators only: users with the `admin` role, users whose email is listed in `ASKWILD_ADMIN_EMAILS`, or any user when `ENABLE_AUTH=false` (single-operator anonymous mode). The email allowlist only controls visibility of the update link; it grants no privileges elsewhere in the app. The version identifier and install label stay visible to everyone.
+
+## Deployment
+
+Pushes to `main` deploy automatically through the Vercel Git integration
+(GitHub App `vercel` → repository `BhagattJii/askwild`). If the integration
+is ever disconnected, deployments must be run by hand with
+`vercel deploy --prod` from the repo root until it is reconnected —
+`vercel git connect` re-establishes the link.
