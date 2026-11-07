@@ -9,11 +9,7 @@ import type { AppUser } from '@/lib/auth/types'
 import type { Preferences } from '@/lib/preferences/shared'
 import { cn } from '@/lib/utils'
 
-import {
-  Avatar,
-  AvatarFallback,
-  AvatarImage
-} from '@/components/ui/avatar'
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 
 import {
@@ -126,7 +122,10 @@ export function SettingsView({
               <div className="divide-y border-t">
                 <div className="flex items-center gap-4 py-5">
                   <Avatar className="size-14 shrink-0">
-                    <AvatarImage src={user.image ?? undefined} alt={user.name || user.email || 'User'} />
+                    <AvatarImage
+                      src={user.image ?? undefined}
+                      alt={user.name || user.email || 'User'}
+                    />
                     <AvatarFallback className="font-medium">
                       {getInitials(user.name || 'User', user.email)}
                     </AvatarFallback>
@@ -164,8 +163,8 @@ export function SettingsView({
             {activeTab.id === 'account' && !user && (
               <div className="border-t pt-5">
                 <p className="text-sm text-muted-foreground">
-                  You are browsing without an account. Sign in to sync
-                  Askwild across devices.
+                  You are browsing without an account. Sign in to sync Askwild
+                  across devices.
                 </p>
                 <Button asChild className="mt-3">
                   <Link href="/auth/login">Sign in</Link>

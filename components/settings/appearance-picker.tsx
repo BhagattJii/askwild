@@ -32,11 +32,7 @@ export function AppearancePicker() {
   const active = theme === 'dark' ? 'dark' : 'light'
 
   return (
-    <div
-      role="radiogroup"
-      aria-label="Appearance"
-      className="flex gap-3"
-    >
+    <div role="radiogroup" aria-label="Appearance" className="flex gap-3">
       {options.map(option => {
         const Icon = option.icon
         const selected = active === option.value

@@ -35,7 +35,7 @@ const { mockPush, mockRefresh } = vi.hoisted(() => ({
 
 vi.mock('next/link', () => ({
   default: ({ href, children, ...rest }: any) => (
-    <a href={typeof href === 'string'? href : '#'} {...rest}>
+    <a href={typeof href === 'string' ? href : '#'} {...rest}>
       {children}
     </a>
   )
@@ -70,10 +70,7 @@ function renderSettings(
       user={userProp}
       capabilities={{ ...capabilities, ...override }}
     >
-      <SettingsView
-        user={userProp}
-        initialPreferences={DEFAULT_PREFERENCES}
-      />
+      <SettingsView user={userProp} initialPreferences={DEFAULT_PREFERENCES} />
     </AppUserProvider>
   )
 }
@@ -88,9 +85,7 @@ describe('SettingsView', () => {
   it('defaults to the My Account tab with identity rows', () => {
     renderSettings()
 
-    expect(
-      screen.getByRole('link', { name: 'My Account' })
-    ).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'My Account' })).toBeInTheDocument()
     expect(screen.getAllByText('Test Person').length).toBeGreaterThan(0)
     expect(screen.getAllByText('person@example.com').length).toBeGreaterThan(0)
     expect(screen.getByText('Full name')).toBeInTheDocument()
@@ -106,11 +101,11 @@ describe('SettingsView', () => {
       expect(screen.getByText('Appearance')).toBeInTheDocument()
     })
 
-    expect(
-      screen.getByRole('radio', { name: 'Bright' })
-    ).toBeInTheDocument()
+    expect(screen.getByRole('radio', { name: 'Bright' })).toBeInTheDocument()
     expect(screen.getByRole('radio', { name: 'Dark' })).toBeInTheDocument()
-    expect(screen.queryByRole('radio', { name: 'System' })).not.toBeInTheDocument()
+    expect(
+      screen.queryByRole('radio', { name: 'System' })
+    ).not.toBeInTheDocument()
     expect(screen.getByText('Preferred response language')).toBeInTheDocument()
     expect(screen.getByText('Autosuggest')).toBeInTheDocument()
     expect(screen.getByText('Related questions')).toBeInTheDocument()
@@ -141,8 +136,6 @@ describe('SettingsView', () => {
     renderSettings(null)
 
     expect(screen.queryByText('person@example.com')).not.toBeInTheDocument()
-    expect(
-      screen.getByRole('link', { name: 'Sign in' })
-    ).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Sign in' })).toBeInTheDocument()
   })
 })

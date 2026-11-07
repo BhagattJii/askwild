@@ -68,9 +68,8 @@ describe('clerk auth provider', () => {
   })
 
   it('points password resets at the Clerk-managed flow', async () => {
-    const result = await clerkAuthProvider.requestPasswordReset?.(
-      'user@example.com'
-    )
+    const result =
+      await clerkAuthProvider.requestPasswordReset?.('user@example.com')
     expect(result?.success).toBe(false)
     expect(result?.redirectTo).toBe('/auth/login')
   })

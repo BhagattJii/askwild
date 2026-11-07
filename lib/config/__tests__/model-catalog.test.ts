@@ -7,7 +7,10 @@ import {
   getModelCatalog,
   selectCatalogModel
 } from '@/lib/config/model-catalog'
-import { MODEL_SELECTION_COOKIE, serializeModelSelectionCookie } from '@/lib/config/model-selection-cookie'
+import {
+  MODEL_SELECTION_COOKIE,
+  serializeModelSelectionCookie
+} from '@/lib/config/model-selection-cookie'
 
 // openai-compatible enablement is keyed off env vars — stub them so the
 // provider resolution passes in the test environment.
@@ -29,7 +32,11 @@ describe('model catalog', () => {
   it('exposes exactly three tiers ordered small to large', () => {
     const catalog = getModelCatalog()
 
-    expect(catalog.map(model => model.tier)).toEqual(['small', 'medium', 'large'])
+    expect(catalog.map(model => model.tier)).toEqual([
+      'small',
+      'medium',
+      'large'
+    ])
     expect(catalog[0].id).toBe('nvidia/nemotron-3.5-lightning-30b-a3b')
     expect(catalog[2].id).toBe('nvidia/nemotron-3-ultra-550b-a55b')
   })

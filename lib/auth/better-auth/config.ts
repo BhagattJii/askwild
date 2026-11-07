@@ -416,7 +416,9 @@ function createAuth() {
     // Only the canonical deployment origin may initiate auth flows; other
     // origins are rejected (blocks cross-site session hijack attempts).
     trustedOrigins: [
-      ...(process.env.BETTER_AUTH_URL ? [process.env.BETTER_AUTH_URL.trim()] : [])
+      ...(process.env.BETTER_AUTH_URL
+        ? [process.env.BETTER_AUTH_URL.trim()]
+        : [])
     ].filter(Boolean),
     // Throttle credential guessing on every auth action. In-memory storage
     // throttles per serverless instance; the Vercel attack-challenge layer

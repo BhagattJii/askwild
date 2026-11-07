@@ -39,8 +39,7 @@ function installFakeRecognition() {
 
 function uninstallFakeRecognition() {
   delete (window as unknown as Record<string, unknown>).SpeechRecognition
-  delete (window as unknown as Record<string, unknown>)
-    .webkitSpeechRecognition
+  delete (window as unknown as Record<string, unknown>).webkitSpeechRecognition
 }
 
 describe('VoiceInputButton', () => {

@@ -1,4 +1,8 @@
-import { type NextFetchEvent, type NextRequest, NextResponse } from 'next/server'
+import {
+  type NextFetchEvent,
+  type NextRequest,
+  NextResponse
+} from 'next/server'
 
 import { clerkMiddleware } from '@clerk/nextjs/server'
 

@@ -23,13 +23,17 @@ export class SearXNGSearchProvider extends BaseSearchProvider {
       const url = new URL(`${apiUrl}/search`)
       url.searchParams.append('q', query)
       url.searchParams.append('format', 'json')
-      url.searchParams.append('categories', process.env.SEARXNG_CATEGORIES || 'general')
+      url.searchParams.append(
+        'categories',
+        process.env.SEARXNG_CATEGORIES || 'general'
+      )
 
       const engines =
         process.env.SEARXNG_ENGINES || 'google,bing,duckduckgo,wikipedia'
       const timeRange = process.env.SEARXNG_TIME_RANGE || 'None'
       const safeSearch =
-        process.env.SEARXNG_SAFESEARCH ?? (searchDepth === 'advanced' ? '0' : '1')
+        process.env.SEARXNG_SAFESEARCH ??
+        (searchDepth === 'advanced' ? '0' : '1')
 
       url.searchParams.append('safesearch', safeSearch)
       url.searchParams.append('engines', engines)

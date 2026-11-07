@@ -187,7 +187,7 @@ SEARXNG_LIMITER=false
 search:
   default_engines: [google, bing, duckduckgo, wikipedia]
 engines:
-  - name: yandex      # disabled: loosely-matched results, poor for English/India
+  - name: yandex # disabled: loosely-matched results, poor for English/India
     disabled: true
 ```
 
@@ -561,18 +561,18 @@ Askwild ships with free, keyless knowledge tools that the model calls for
 time-sensitive or factual questions. Failures degrade gracefully (the agent
 falls back to web search) — no keys or crashes.
 
-| Tool | Returns |
-| ---- | ------- |
-| `dynamic__wikiSummary` | Wikipedia summary + source URL for "what/who/explain" questions |
-| `dynamic__weather` | Current conditions + 3-day forecast for any city (Open-Meteo) |
-| `dynamic__currencyRate` | Live mid-market FX conversion (Frankfurter) |
-| `dynamic__stockQuote` | Live price + daily change — Indian (`RELIANCE.NS`, `^NSEI`, `^BSESN`), US (`AAPL`, `^GSPC`) (Yahoo Finance) |
-| `dynamic__newsSearch` | Latest headlines with source and publication time (Google News) |
-| `dynamic__academicSearch` | arXiv papers with abstracts and links |
-| `dynamic__cryptoPrice` | Live coin prices in INR/USD with 24h change (CoinGecko) |
-| `dynamic__commodity` | Gold/silver/crude oil futures, USD converted to INR (Yahoo Finance + Frankfurter) |
-| `dynamic__worldEvents` | Live USGS earthquakes (≥4.5) and NASA EONET active disasters (wildfires, storms, volcanoes) |
-| `dynamic__newsSearch(when='1h')` | Breaking news restricted to the last hour |
+| Tool                             | Returns                                                                                                     |
+| -------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| `dynamic__wikiSummary`           | Wikipedia summary + source URL for "what/who/explain" questions                                             |
+| `dynamic__weather`               | Current conditions + 3-day forecast for any city (Open-Meteo)                                               |
+| `dynamic__currencyRate`          | Live mid-market FX conversion (Frankfurter)                                                                 |
+| `dynamic__stockQuote`            | Live price + daily change — Indian (`RELIANCE.NS`, `^NSEI`, `^BSESN`), US (`AAPL`, `^GSPC`) (Yahoo Finance) |
+| `dynamic__newsSearch`            | Latest headlines with source and publication time (Google News)                                             |
+| `dynamic__academicSearch`        | arXiv papers with abstracts and links                                                                       |
+| `dynamic__cryptoPrice`           | Live coin prices in INR/USD with 24h change (CoinGecko)                                                     |
+| `dynamic__commodity`             | Gold/silver/crude oil futures, USD converted to INR (Yahoo Finance + Frankfurter)                           |
+| `dynamic__worldEvents`           | Live USGS earthquakes (≥4.5) and NASA EONET active disasters (wildfires, storms, volcanoes)                 |
+| `dynamic__newsSearch(when='1h')` | Breaking news restricted to the last hour                                                                   |
 
 The tools are registered in `lib/tools/knowledge.ts` and enabled for both
 `quick` and `adaptive` search modes. Add or remove them in
@@ -584,11 +584,11 @@ The tools are registered in `lib/tools/knowledge.ts` and enabled for both
 Production (`ASKWILD_CLOUD_DEPLOYMENT=true`) serves three NVIDIA-powered
 tiers from the OpenAI-compatible provider (`config/models/catalog.json`):
 
-| Tier | Model | Access |
-| ---- | ----- | ------ |
-| Small | `nvidia/nemotron-3.5-lightning-30b-a3b` (Nemotron 3.5 Lightning) | Everyone, including guests |
+| Tier   | Model                                                                            | Access                             |
+| ------ | -------------------------------------------------------------------------------- | ---------------------------------- |
+| Small  | `nvidia/nemotron-3.5-lightning-30b-a3b` (Nemotron 3.5 Lightning)                 | Everyone, including guests         |
 | Medium | `nvidia/nemotron-3-nano-omni-30b-a3b-reasoning` (Nemotron 3 Nano Omni Reasoning) | Signed-in only (locked for guests) |
-| Large | `nvidia/nemotron-3-ultra-550b-a55b` (Nemotron 3 Ultra 550B) | Signed-in only (locked for guests) |
+| Large  | `nvidia/nemotron-3-ultra-550b-a55b` (Nemotron 3 Ultra 550B)                      | Signed-in only (locked for guests) |
 
 Rules:
 

@@ -89,7 +89,9 @@ export function VoiceInputButton({
       recognition.onerror = event => {
         const code = event.error
         if (code === 'not-allowed' || code === 'service-not-allowed') {
-          toast.error('Microphone access is blocked. Allow it in browser site settings.')
+          toast.error(
+            'Microphone access is blocked. Allow it in browser site settings.'
+          )
         } else if (code === 'no-speech' || code === 'aborted') {
           // Silent — user simply did not speak or cancelled.
         } else {
@@ -107,7 +109,9 @@ export function VoiceInputButton({
       setListening(true)
     } catch {
       setListening(false)
-      toast.error('Voice input could not be started. Check microphone permissions.')
+      toast.error(
+        'Voice input could not be started. Check microphone permissions.'
+      )
     }
   }
 

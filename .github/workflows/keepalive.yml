@@ -1,0 +1,37 @@
+name: Keep Services Warm
+
+# Render free-tier services sleep after ~15 minutes of inactivity. The first
+# request after sleep takes 15-35s (Render cold boot) — longer than a chat
+# turn should ever wait — and Vercel functions cold-start around 1.9s TTFB.
+# Pinging both on a 10-minute cadence keeps them warm, so users always hit
+# the fast path.
+#
+# Override the targets with repository variables if the URLs change:
+#   ASKWILD_SEARCH_URL  (OpenSERP service root, e.g. https://<name>.onrender.com)
+#   ASKWILD_APP_URL     (deployed app root, e.g. https://askwild.vercel.app)
+
+on:
+  schedule:
+    - cron: '*/10 * * * *'
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Ping OpenSERP search service
+        env:
+          ASKWILD_SEARCH_URL: ${{ vars.ASKWILD_SEARCH_URL || 'https://askwild-search-3ynh.onrender.com' }}
+        run: |
+          # The web search endpoint, not the root: it exercises the real
+          # code path a search tool call takes, including engine selection.
+          curl -sS --max-time 60 -o /dev/null -w "openserp_status=%{http_code}\n" \
+            "${ASKWILD_SEARCH_URL}/google/search?text=keepalive&limit=1&format=json"
+
+      - name: Ping deployed app
+        env:
+          ASKWILD_APP_URL: ${{ vars.ASKWILD_APP_URL || 'https://askwild.vercel.app' }}
+        run: |
+          curl -sS --max-time 60 -o /dev/null -w "app_status=%{http_code}\n" \
+            "${ASKWILD_APP_URL}/"

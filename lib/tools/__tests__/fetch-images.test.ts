@@ -31,7 +31,8 @@ describe('extractImages', () => {
   })
 
   it('extracts markdown image links', () => {
-    const md = 'Read more. ![map](https://cdn.example.com/map.jpg) ![chart](https://cdn.example.com/chart.png)'
+    const md =
+      'Read more. ![map](https://cdn.example.com/map.jpg) ![chart](https://cdn.example.com/chart.png)'
     expect(extractImages(md)).toEqual([
       'https://cdn.example.com/map.jpg',
       'https://cdn.example.com/chart.png'

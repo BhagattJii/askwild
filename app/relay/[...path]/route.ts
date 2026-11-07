@@ -1,10 +1,7 @@
 import { type NextRequest } from 'next/server'
 
-import {
-  exceedsRelayBodyCap,
-  relayTarget
-} from '@/lib/analytics/relay-target'
 import { cappedBody, PayloadTooLargeError } from '@/lib/analytics/capped-body'
+import { exceedsRelayBodyCap, relayTarget } from '@/lib/analytics/relay-target'
 
 /**
  * Same-origin PostHog relay for Better Auth. A proxy rewrite forwards the

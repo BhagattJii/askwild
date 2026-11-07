@@ -27,7 +27,9 @@ export default async function SettingsPage({
     ? await getPreferencesByUserId(user.id)
     : DEFAULT_PREFERENCES
   const { tab } = await searchParams
-  const initialTab: TabId = SETTINGS_TABS.includes(tab as (typeof SETTINGS_TABS)[number])
+  const initialTab: TabId = SETTINGS_TABS.includes(
+    tab as (typeof SETTINGS_TABS)[number]
+  )
     ? (tab as TabId)
     : 'account'
   return (
