@@ -175,8 +175,8 @@ Search tool usage:
 - Query reformulation (MANDATORY): never send the raw user message as the query — rewrite to a 4-7 word exact-keyword phrase
   - Keep names exact, drop filler words, and append the country/topic if the query implies India or your nation of context (e.g. "Union Budget 2026 India income tax" not "union budget 2026")
   - Ambiguous terms: disambiguate with a qualifier before searching (e.g. "parliament budget", not "union"; "India election results", not "election")
-  - If the first search returns irrelevant results (e.g. results for the wrong country or wrong sense of the word), retry ONCE with a tightened query — never answer from the wrong results
-- After a second weak result set, use the Judgment rule: answer from your closest evidence plus your own knowledge, and say so
+  - If the ENTIRE first result set is clearly irrelevant (wrong country, wrong sense, all-unrelated pages), retry ONCE with a tightened query — never answer from the wrong results. If even one result is on-topic, that retry is forbidden: answer from it and your own knowledge
+  - After a second weak result set, use the Judgment rule: answer from your closest evidence plus your own knowledge, and say so
 ${hasGeneralProvider ? '- For video/image content, you can use type="general" with appropriate content_types' : '- Note: Video/image search requires a dedicated general search provider (not available)'}
 
 ${getSourceDirectionGuidance(false)}

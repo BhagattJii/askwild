@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { OpenserpSearchProvider } from '@/lib/tools/search/providers/openserp'
+import { resetSearchCacheForTests } from '@/lib/tools/search/providers/openserp-cache'
 
 const originalFetch = globalThis.fetch
 const originalUrl = process.env.OPENSERP_URL
@@ -18,6 +19,7 @@ function jsonResponse(data: unknown, status = 200): Response {
 let provider: OpenserpSearchProvider
 
 beforeEach(() => {
+  resetSearchCacheForTests()
   fetchMock.mockReset()
   globalThis.fetch = fetchMock
   process.env.OPENSERP_URL = 'http://localhost:7070'
@@ -161,5 +163,88 @@ describe('OpenserpSearchProvider', () => {
       'https://img.example/big.jpg',
       'https://img.example/two.jpg'
     ])
+  })
+
+  it('serves a repeat query from the cache without another fetch', async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({
+        results: [
+          {
+            rank: 1,
+            type: 'organic',
+            title: 'Cached answer',
+            url: 'https://c.example/'
+          }
+        ]
+      })
+    )
+
+    const first = await provider.search('cache test', 5)
+    expect(first.results).toHaveLength(1)
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+
+    const second = await provider.search('cache test', 5)
+    expect(second.fromCache).toBe(true)
+    expect(second.results[0].title).toBe('Cached answer')
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('restores results from the Upstash layer for another lambda', async () => {
+    process.env.UPSTASH_REDIS_REST_URL = 'http://upstash.test'
+    process.env.UPSTASH_REDIS_REST_TOKEN = 'token'
+    let storedBody: string | undefined
+
+    fetchMock.mockImplementation(async (input, init) => {
+      const url = String(input)
+      if (url.startsWith('http://upstash.test')) {
+        if (url.includes('/set/')) {
+          storedBody = String(init?.body)
+          return new Response('{"ok":true}')
+        }
+        // GET - first search misses, second search finds what was stored
+        return new Response(
+          storedBody
+            ? JSON.stringify({ result: storedBody })
+            : JSON.stringify({ result: null })
+        )
+      }
+      return jsonResponse({
+        results: [
+          { rank: 1, type: 'organic', title: 'Up', url: 'https://u.example/' }
+        ]
+      })
+    })
+
+    const first = await provider.search('upstash test', 5)
+    expect(first.fromCache).toBeUndefined()
+    const engineCalls = () =>
+      fetchMock.mock.calls.filter(c => !String(c[0]).includes('upstash.test'))
+    expect(engineCalls()).toHaveLength(1)
+
+    resetSearchCacheForTests()
+    const second = await new OpenserpSearchProvider().search('upstash test', 5)
+    expect(second.fromCache).toBe(true)
+    expect(second.results[0].title).toBe('Up')
+    // the repeat was answered by the shared cache: no new engine fetch
+    expect(engineCalls()).toHaveLength(1)
+    delete process.env.UPSTASH_REDIS_REST_URL
+    delete process.env.UPSTASH_REDIS_REST_TOKEN
+  })
+
+  it('does not cache empty result sets', async () => {
+    fetchMock.mockImplementation(() =>
+      Promise.resolve(jsonResponse({ results: [] }))
+    )
+
+    const first = await provider.search('empty test', 5)
+    const second = await provider.search('empty test', 5)
+
+    expect(first.results).toHaveLength(0)
+    expect(second.fromCache).toBeUndefined()
+    // google,bing run per search; every other call is an upstash miss
+    const engineRuns = fetchMock.mock.calls.filter(
+      c => !String(c[0]).includes('upstash')
+    )
+    expect(engineRuns).toHaveLength(4)
   })
 })
