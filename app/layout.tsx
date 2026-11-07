@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next'
 import { Inter as FontSans } from 'next/font/google'
 
+import { ClerkProvider } from '@clerk/nextjs'
 import { Analytics } from '@vercel/analytics/next'
 
 import { getCurrentUser } from '@/lib/auth/get-current-user'
@@ -109,6 +110,46 @@ export default async function RootLayout({
       }
     : null
 
+  const clerkEnabled =
+    authProvider.name === 'clerk' &&
+    Boolean(process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY)
+
+  const appTree = (
+    <ThemeProvider
+      attribute="class"
+      defaultTheme="system"
+      enableSystem
+      disableTransitionOnChange
+    >
+      <PostHogProvider userId={user?.id ?? null}>
+        <AppUserProvider user={user} capabilities={capabilities}>
+          <UserProvider hasUser={!!userId}>
+            <SidebarProvider defaultOpen={false}>
+              <LibraryProvider>
+                <UsageBudgetProvider
+                  key={user?.id ?? 'guest'}
+                  initialUsage={initialUsage}
+                  enabled={usageBudgetEnabled}
+                >
+                  <AppSidebar user={user} />
+                  <KeyboardShortcutHandler />
+                  <div className="flex flex-col flex-1 min-w-0">
+                    <Header user={user} />
+                    <main className="flex flex-1 min-h-0 min-w-0 overflow-hidden">
+                      <ArtifactRoot>{children}</ArtifactRoot>
+                    </main>
+                  </div>
+                </UsageBudgetProvider>
+              </LibraryProvider>
+            </SidebarProvider>
+          </UserProvider>
+        </AppUserProvider>
+      </PostHogProvider>
+      <Toaster />
+      {isCloudDeployment && <Analytics />}
+    </ThemeProvider>
+  )
+
   return (
     <html lang="en" suppressHydrationWarning>
       <body
@@ -117,39 +158,18 @@ export default async function RootLayout({
           fontSans.variable
         )}
       >
-        <ThemeProvider
-          attribute="class"
-          defaultTheme="system"
-          enableSystem
-          disableTransitionOnChange
-        >
-          <PostHogProvider userId={user?.id ?? null}>
-            <AppUserProvider user={user} capabilities={capabilities}>
-              <UserProvider hasUser={!!userId}>
-                <SidebarProvider defaultOpen={false}>
-                  <LibraryProvider>
-                    <UsageBudgetProvider
-                      key={user?.id ?? 'guest'}
-                      initialUsage={initialUsage}
-                      enabled={usageBudgetEnabled}
-                    >
-                      <AppSidebar user={user} />
-                      <KeyboardShortcutHandler />
-                      <div className="flex flex-col flex-1 min-w-0">
-                        <Header user={user} />
-                        <main className="flex flex-1 min-h-0 min-w-0 overflow-hidden">
-                          <ArtifactRoot>{children}</ArtifactRoot>
-                        </main>
-                      </div>
-                    </UsageBudgetProvider>
-                  </LibraryProvider>
-                </SidebarProvider>
-              </UserProvider>
-            </AppUserProvider>
-          </PostHogProvider>
-          <Toaster />
-          {isCloudDeployment && <Analytics />}
-        </ThemeProvider>
+        {clerkEnabled ? (
+          <ClerkProvider
+            dynamic
+            publishableKey={process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY}
+            signInUrl="/auth/login"
+            signUpUrl="/auth/login"
+          >
+            {appTree}
+          </ClerkProvider>
+        ) : (
+          appTree
+        )}
       </body>
     </html>
   )
