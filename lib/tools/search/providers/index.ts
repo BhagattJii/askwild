@@ -13,6 +13,7 @@ export type SearchProviderType =
   | 'firecrawl'
   | 'brave'
   | 'openserp'
+  | 'news-rss'
 export const DEFAULT_PROVIDER: SearchProviderType = 'tavily'
 
 export function createSearchProvider(
@@ -31,6 +32,9 @@ export function createSearchProvider(
     case 'brave':
       return new BraveSearchProvider()
     case 'openserp':
+      return new OpenserpSearchProvider()
+    case 'news-rss':
+      throw new Error('news-rss is a wrapper lane, not a standalone provider')
       return new OpenserpSearchProvider()
     case 'firecrawl':
       return new FirecrawlSearchProvider()
