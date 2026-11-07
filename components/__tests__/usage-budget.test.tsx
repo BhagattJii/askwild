@@ -19,9 +19,7 @@ vi.mock('next/navigation', () => ({
 }))
 
 vi.mock('@/components/account-menu', () => ({
-  AccountMenu: ({ trigger }: { trigger: React.ReactNode }) => (
-    <>{trigger}</>
-  )
+  AccountMenu: ({ trigger }: { trigger: React.ReactNode }) => <>{trigger}</>
 }))
 
 vi.mock('@/components/external-link-items', () => ({

@@ -77,9 +77,10 @@ describe('AccountMenu', () => {
     expect(
       screen.queryByRole('button', { name: /Preferences/ })
     ).not.toBeInTheDocument()
-    expect(
-      screen.getByRole('link', { name: /Help Center/ })
-    ).toHaveAttribute('href', 'https://github.com/BhagattJii/askwild/issues')
+    expect(screen.getByRole('link', { name: /Help Center/ })).toHaveAttribute(
+      'href',
+      'https://github.com/BhagattJii/askwild/issues'
+    )
     expect(
       screen.getByRole('button', { name: /Delete account/ })
     ).toBeInTheDocument()
@@ -101,9 +102,7 @@ describe('AccountMenu', () => {
     chatStore.getOrCreate('cached', { messages: [] })
 
     fireEvent.click(screen.getByRole('button', { name: /Delete account/ }))
-    expect(
-      screen.getByText('Delete your account?')
-    ).toBeInTheDocument()
+    expect(screen.getByText('Delete your account?')).toBeInTheDocument()
 
     const confirmButtons = screen.getAllByRole('button', {
       name: /Delete account/
@@ -127,9 +126,10 @@ describe('AccountMenu', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Open profile' }))
     fireEvent.click(screen.getByRole('link', { name: /Help Center/ }))
-    expect(
-      screen.getByRole('link', { name: /Help Center/ })
-    ).toHaveAttribute('target', '_blank')
+    expect(screen.getByRole('link', { name: /Help Center/ })).toHaveAttribute(
+      'target',
+      '_blank'
+    )
   })
 
   it('asks for confirmation before signing out and signs out on confirm', async () => {
@@ -139,9 +139,7 @@ describe('AccountMenu', () => {
     chatStore.getOrCreate('cached', { messages: [] })
 
     fireEvent.click(screen.getByRole('button', { name: 'Sign out' }))
-    expect(
-      screen.getByText('Sign out of Askwild?')
-    ).toBeInTheDocument()
+    expect(screen.getByText('Sign out of Askwild?')).toBeInTheDocument()
 
     const confirmButtons = screen.getAllByRole('button', { name: 'Sign out' })
     fireEvent.click(confirmButtons.at(-1)!)
@@ -161,9 +159,6 @@ describe('AccountMenu', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
 
     expect(signOut).not.toHaveBeenCalled()
-    expect(
-      screen.queryByText('Sign out of Askwild?')
-    ).not.toBeInTheDocument()
+    expect(screen.queryByText('Sign out of Askwild?')).not.toBeInTheDocument()
   })
-
 })

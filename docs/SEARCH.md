@@ -57,13 +57,13 @@ results. See [Search Providers](./CONFIGURATION.md#search-providers).
 
 ## Option 3 — Hosted APIs (best quality, metered)
 
-| Service | Free tier | Notes |
-| --- | --- | --- |
-| Tavily | 1,000 req/mo | Default |
-| Brave Search | $5 credits ≈ 1,000/mo | Needs card for free plan |
-| Exa | $10/mo | |
-| Firecrawl | 1,000/mo | |
-| LangSearch | free daily credits, resets 00:00 UTC | |
+| Service      | Free tier                            | Notes                    |
+| ------------ | ------------------------------------ | ------------------------ |
+| Tavily       | 1,000 req/mo                         | Default                  |
+| Brave Search | $5 credits ≈ 1,000/mo                | Needs card for free plan |
+| Exa          | $10/mo                               |                          |
+| Firecrawl    | 1,000/mo                             |                          |
+| LangSearch   | free daily credits, resets 00:00 UTC |                          |
 
 Good regional and semantic quality; no sleep, low latency. Pay nothing if you
 stay under quotas; overflow becomes error/429 automatically.

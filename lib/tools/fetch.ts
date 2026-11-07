@@ -80,10 +80,7 @@ function extractImages(html: string, limit = 6): string[] {
 }
 
 function normalizeImageUrl(raw: string): string | null {
-  const trimmed = raw
-    .trim()
-    .replace(/&amp;/g, '&')
-    .replace(/^\/\//, 'https://')
+  const trimmed = raw.trim().replace(/&amp;/g, '&').replace(/^\/\//, 'https://')
   if (/^https?:\/\//i.test(trimmed)) {
     // Drop common tracking/pixel-sized images.
     if (/[\/_.-](1x1|pixel|spacer|blank|tracking)(\b|\.gif)/i.test(trimmed)) {

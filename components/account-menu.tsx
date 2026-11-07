@@ -34,9 +34,7 @@ import {
 import { Separator } from '@/components/ui/separator'
 import { Spinner } from '@/components/ui/spinner'
 
-import {
-  DeleteAccountButton
-} from '@/components/settings/delete-account-button'
+import { DeleteAccountButton } from '@/components/settings/delete-account-button'
 
 function getInitials(name: string, email: string | null | undefined): string {
   if (name && name !== 'User') {
@@ -196,7 +194,9 @@ export function AccountMenu({ user, trigger }: AccountMenuProps) {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={isSigningOut}>Cancel</AlertDialogCancel>
+            <AlertDialogCancel disabled={isSigningOut}>
+              Cancel
+            </AlertDialogCancel>
             <AlertDialogAction
               disabled={isSigningOut}
               onClick={event => {

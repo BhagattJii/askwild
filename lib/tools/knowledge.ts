@@ -99,7 +99,11 @@ export function createWeatherTool() {
         const forecast = (await fetchJson(
           `https://api.open-meteo.com/v1/forecast?latitude=${place.latitude}&longitude=${place.longitude}&current_weather=true&daily=weathercode,temperature_2m_max,temperature_2m_min,precipitation_probability_max&forecast_days=3&timezone=auto`
         )) as {
-          current_weather?: { temperature: number; windspeed: number; weathercode: number }
+          current_weather?: {
+            temperature: number
+            windspeed: number
+            weathercode: number
+          }
           daily?: {
             time: string[]
             temperature_2m_max: number[]
@@ -128,7 +132,8 @@ export function createWeatherTool() {
                 maxC: daily.temperature_2m_max[i],
                 minC: daily.temperature_2m_min[i],
                 condition: weatherCondition(daily.weathercode[i]),
-                rainChancePercent: daily.precipitation_probability_max?.[i] ?? null
+                rainChancePercent:
+                  daily.precipitation_probability_max?.[i] ?? null
               }))
             : []
         }
@@ -207,8 +212,11 @@ export function createStockQuoteTool() {
         if (!meta?.regularMarketPrice) {
           return { found: false as const, symbol: s }
         }
-        const previousClose = meta.previousClose ?? meta.chartPreviousClose ?? null
-        const change = previousClose ? meta.regularMarketPrice - previousClose : null
+        const previousClose =
+          meta.previousClose ?? meta.chartPreviousClose ?? null
+        const change = previousClose
+          ? meta.regularMarketPrice - previousClose
+          : null
         const changePercent =
           previousClose && previousClose !== 0
             ? (change! / previousClose) * 100
@@ -234,7 +242,8 @@ export function createStockQuoteTool() {
 }
 
 const RSS_ITEM = /<item>([\s\S]*?)<\/item>/g
-const RSS_TITLE = /<title><!\[CDATA\[([\s\S]*?)\]\]><\/title>|<title>([\s\S]*?)<\/title>/
+const RSS_TITLE =
+  /<title><!\[CDATA\[([\s\S]*?)\]\]><\/title>|<title>([\s\S]*?)<\/title>/
 const RSS_LINK = /<link>([\s\S]*?)<\/link>/
 const RSS_PUBDATE = /<pubDate>([\s\S]*?)<\/pubDate>/
 const RSS_SOURCE = /<source[^>]*>([\s\S]*?)<\/source>/
@@ -243,10 +252,123 @@ function stripCdata(text: string): string {
   return text.replace(/^<!\[CDATA\[|\]\]>$/g, '').trim()
 }
 
+interface NewsEdition {
+  hl: string
+  gl: string
+  ceid: string
+}
+
+const GLOBAL_NEWS_EDITION: NewsEdition = {
+  hl: 'en-US',
+  gl: 'US',
+  ceid: 'US:en'
+}
+
+const NEWS_EDITIONS: Array<NewsEdition & { names: string[] }> = [
+  {
+    names: ['united states', 'united states of america', 'usa', 'america'],
+    hl: 'en-US',
+    gl: 'US',
+    ceid: 'US:en'
+  },
+  {
+    names: ['united kingdom', 'great britain', 'britain', 'england', 'uk'],
+    hl: 'en-GB',
+    gl: 'GB',
+    ceid: 'GB:en'
+  },
+  {
+    names: ['india', 'bharat', 'hindustan'],
+    hl: 'en-IN',
+    gl: 'IN',
+    ceid: 'IN:en'
+  },
+  { names: ['pakistan'], hl: 'en-PK', gl: 'PK', ceid: 'PK:en' },
+  { names: ['bangladesh'], hl: 'bn', gl: 'BD', ceid: 'BD:bn' },
+  { names: ['nepal'], hl: 'ne', gl: 'NP', ceid: 'NP:ne' },
+  { names: ['sri lanka'], hl: 'en-LK', gl: 'LK', ceid: 'LK:en' },
+  { names: ['australia'], hl: 'en-AU', gl: 'AU', ceid: 'AU:en' },
+  { names: ['canada'], hl: 'en-CA', gl: 'CA', ceid: 'CA:en' },
+  { names: ['ireland'], hl: 'en-IE', gl: 'IE', ceid: 'IE:en' },
+  { names: ['new zealand'], hl: 'en-NZ', gl: 'NZ', ceid: 'NZ:en' },
+  { names: ['south africa'], hl: 'en-ZA', gl: 'ZA', ceid: 'ZA:en' },
+  { names: ['nigeria'], hl: 'en-NG', gl: 'NG', ceid: 'NG:en' },
+  { names: ['kenya'], hl: 'en-KE', gl: 'KE', ceid: 'KE:en' },
+  { names: ['japan', 'nihon', 'nippon'], hl: 'ja', gl: 'JP', ceid: 'JP:ja' },
+  { names: ['china'], hl: 'zh-CN', gl: 'CN', ceid: 'CN:zh-CN' },
+  { names: ['taiwan'], hl: 'zh-TW', gl: 'TW', ceid: 'TW:zh-TW' },
+  { names: ['hong kong'], hl: 'zh-HK', gl: 'HK', ceid: 'HK:zh-HK' },
+  { names: ['south korea', 'korea'], hl: 'ko', gl: 'KR', ceid: 'KR:ko' },
+  { names: ['france'], hl: 'fr', gl: 'FR', ceid: 'FR:fr' },
+  { names: ['germany', 'deutschland'], hl: 'de', gl: 'DE', ceid: 'DE:de' },
+  { names: ['spain', 'espana'], hl: 'es', gl: 'ES', ceid: 'ES:es' },
+  { names: ['mexico'], hl: 'es-419', gl: 'MX', ceid: 'MX:es-419' },
+  { names: ['argentina'], hl: 'es-419', gl: 'AR', ceid: 'AR:es-419' },
+  { names: ['colombia'], hl: 'es-419', gl: 'CO', ceid: 'CO:es-419' },
+  { names: ['chile'], hl: 'es-419', gl: 'CL', ceid: 'CL:es-419' },
+  { names: ['peru'], hl: 'es-419', gl: 'PE', ceid: 'PE:es-419' },
+  { names: ['brazil', 'brasil'], hl: 'pt-BR', gl: 'BR', ceid: 'BR:pt-BR' },
+  { names: ['portugal'], hl: 'pt-PT', gl: 'PT', ceid: 'PT:pt-PT' },
+  { names: ['italy', 'italia'], hl: 'it', gl: 'IT', ceid: 'IT:it' },
+  { names: ['netherlands', 'holland'], hl: 'nl', gl: 'NL', ceid: 'NL:nl' },
+  { names: ['russia'], hl: 'ru', gl: 'RU', ceid: 'RU:ru' },
+  { names: ['ukraine'], hl: 'uk', gl: 'UA', ceid: 'UA:uk' },
+  { names: ['turkey', 'turkiye'], hl: 'tr', gl: 'TR', ceid: 'TR:tr' },
+  { names: ['indonesia'], hl: 'id', gl: 'ID', ceid: 'ID:id' },
+  { names: ['vietnam'], hl: 'vi', gl: 'VN', ceid: 'VN:vi' },
+  { names: ['thailand'], hl: 'th', gl: 'TH', ceid: 'TH:th' },
+  { names: ['philippines'], hl: 'en-PH', gl: 'PH', ceid: 'PH:en' },
+  { names: ['malaysia'], hl: 'en-MY', gl: 'MY', ceid: 'MY:en' },
+  { names: ['singapore'], hl: 'en-SG', gl: 'SG', ceid: 'SG:en' },
+  { names: ['saudi arabia', 'saudi'], hl: 'ar', gl: 'SA', ceid: 'SA:ar' },
+  { names: ['egypt'], hl: 'ar', gl: 'EG', ceid: 'EG:ar' },
+  {
+    names: ['united arab emirates', 'dubai'],
+    hl: 'ar',
+    gl: 'AE',
+    ceid: 'AE:ar'
+  },
+  { names: ['israel'], hl: 'he', gl: 'IL', ceid: 'IL:he' },
+  { names: ['iran'], hl: 'fa', gl: 'IR', ceid: 'IR:fa' },
+  { names: ['poland'], hl: 'pl', gl: 'PL', ceid: 'PL:pl' },
+  { names: ['sweden'], hl: 'sv', gl: 'SE', ceid: 'SE:sv' },
+  { names: ['norway'], hl: 'no', gl: 'NO', ceid: 'NO:no' },
+  { names: ['denmark'], hl: 'da', gl: 'DK', ceid: 'DK:da' },
+  { names: ['greece'], hl: 'el', gl: 'GR', ceid: 'GR:el' }
+]
+
+export function detectNewsEdition(query: string): NewsEdition {
+  if (/[\u0900-\u097f]/.test(query)) {
+    return { hl: 'hi', gl: 'IN', ceid: 'IN:hi' }
+  }
+
+  const normalized = query
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9\s]/g, ' ')
+
+  let best: { edition: NewsEdition; position: number } | null = null
+  for (const edition of NEWS_EDITIONS) {
+    for (const name of edition.names) {
+      const position = normalized.indexOf(name)
+      if (position === -1) continue
+      if (!best || position < best.position) {
+        best = {
+          edition: { hl: edition.hl, gl: edition.gl, ceid: edition.ceid },
+          position
+        }
+      }
+    }
+  }
+
+  return best?.edition ?? GLOBAL_NEWS_EDITION
+}
+
 export function createNewsSearchTool() {
   return tool({
     description:
-      'Latest news headlines with source and publication time. Use for any news/today/breaking/what happened question. Defaults to Indian outlets.',
+      'Latest news headlines with source and publication time, worldwide. The edition follows the country named in the query (Japan, France, Mexico in Spanish, Hindi-script queries, ...) and falls back to the neutral global edition. Use for any news/today/breaking/what happened question.',
     inputSchema: z.object({
       query: z
         .string()
@@ -261,9 +383,9 @@ export function createNewsSearchTool() {
     }),
     async execute({ query, maxResults, when }) {
       try {
-        const q =
-          when === 'all' ? query.trim() : `${query.trim()} when:${when}`
-        const url = `https://news.google.com/rss/search?q=${encodeURIComponent(q)}&hl=en-IN&gl=IN&ceid=IN:en`
+        const q = when === 'all' ? query.trim() : `${query.trim()} when:${when}`
+        const edition = detectNewsEdition(query)
+        const url = `https://news.google.com/rss/search?q=${encodeURIComponent(q)}&hl=${encodeURIComponent(edition.hl)}&gl=${edition.gl}&ceid=${encodeURIComponent(edition.ceid)}`
         const response = await fetch(url, {
           headers: { 'User-Agent': 'Askwild/1.0 (free AI search)' },
           signal: AbortSignal.timeout(FAST_TIMEOUT_MS)
@@ -317,7 +439,11 @@ export function createAcademicSearchTool() {
     description:
       'Research papers from arXiv (title, authors, abstract, link). Use for any science/research/paper/study question — especially on AI, physics, math, CS, economics.',
     inputSchema: z.object({
-      query: z.string().min(1).max(150).describe('Paper topic, e.g. "quantum error correction"'),
+      query: z
+        .string()
+        .min(1)
+        .max(150)
+        .describe('Paper topic, e.g. "quantum error correction"'),
       maxResults: z.number().int().min(1).max(8).default(5)
     }),
     async execute({ query, maxResults }) {
@@ -345,8 +471,12 @@ export function createAcademicSearchTool() {
           const titleMatch = block.match(ENTRY_TITLE)
           const summaryMatch = block.match(ENTRY_SUMMARY)
           const publishedMatch = block.match(ENTRY_PUBLISHED)
-          const authors = [...block.matchAll(ENTRY_AUTHOR)].map(m => m[1].trim())
-          const title = titleMatch ? titleMatch[1].replace(/\s+/g, ' ').trim() : ''
+          const authors = [...block.matchAll(ENTRY_AUTHOR)].map(m =>
+            m[1].trim()
+          )
+          const title = titleMatch
+            ? titleMatch[1].replace(/\s+/g, ' ').trim()
+            : ''
           if (!title) continue
           papers.push({
             id: idMatch ? idMatch[1] : 'unknown',
@@ -356,7 +486,9 @@ export function createAcademicSearchTool() {
               ? summaryMatch[1].replace(/\s+/g, ' ').trim().slice(0, 400)
               : '',
             published: publishedMatch ? publishedMatch[1].trim() : '',
-            link: idMatch ? `https://arxiv.org/abs/${idMatch[1]}` : 'https://arxiv.org'
+            link: idMatch
+              ? `https://arxiv.org/abs/${idMatch[1]}`
+              : 'https://arxiv.org'
           })
         }
         return { ok: true as const, query, papers }
@@ -433,10 +565,11 @@ export function createCryptoPriceTool() {
           vs,
           inr: price.inr ?? null,
           usd: price.usd ?? null,
-          change24hPercent: (quote === 'inr'
-            ? price.inr_24h_change
-            : price.usd_24h_change) ?? null,
-          volume24h: (quote === 'inr' ? price.inr_24h_vol : price.usd_24h_vol) ?? null
+          change24hPercent:
+            (quote === 'inr' ? price.inr_24h_change : price.usd_24h_change) ??
+            null,
+          volume24h:
+            (quote === 'inr' ? price.inr_24h_vol : price.usd_24h_vol) ?? null
         }
       } catch {
         return { found: false as const, coin }

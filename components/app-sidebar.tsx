@@ -23,11 +23,7 @@ import { IconLogo } from './ui/icons'
 import GuestMenu from './guest-menu'
 import UserProfile from './user-profile'
 
-export default function AppSidebar({
-  user
-}: {
-  user?: AppUser | null
-}) {
+export default function AppSidebar({ user }: { user?: AppUser | null }) {
   // Anonymous mode has no per-user library, and the server actions reject it,
   // so the entry point follows the same switch the pages use.
   const libraryAvailable = !isAnonymousMode()

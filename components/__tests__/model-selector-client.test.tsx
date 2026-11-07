@@ -124,9 +124,7 @@ describe('ModelSelectorClient guest gating', () => {
         name: 'Nemotron 3 Ultra 550B (sign in to unlock)'
       })
     ).toBeInTheDocument()
-    expect(
-      screen.getByRole('button', { name: 'Sign in' })
-    ).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Sign in' })).toBeInTheDocument()
   })
 
   it('opens the sign-in prompt when a guest clicks a locked model', () => {
@@ -148,7 +146,9 @@ describe('ModelSelectorClient guest gating', () => {
     renderSelector(signedInData, undefined, signedInUser)
 
     fireEvent.click(screen.getByRole('combobox'))
-    fireEvent.click(screen.getByRole('option', { name: 'Nemotron 3 Nano Omni Reasoning' }))
+    fireEvent.click(
+      screen.getByRole('option', { name: 'Nemotron 3 Nano Omni Reasoning' })
+    )
 
     await waitFor(() => {
       expect(document.cookie).toContain('selectedModel')

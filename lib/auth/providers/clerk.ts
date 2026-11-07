@@ -1,5 +1,5 @@
 import { cookies } from 'next/headers'
-import { type NextRequest,NextResponse } from 'next/server'
+import { type NextRequest, NextResponse } from 'next/server'
 
 import { auth, clerkClient } from '@clerk/nextjs/server'
 
@@ -8,7 +8,8 @@ import { parseAdminEmails } from '@/lib/version/admins'
 
 function isClerkConfigured(): boolean {
   return Boolean(
-    process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY && process.env.CLERK_SECRET_KEY
+    process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY &&
+      process.env.CLERK_SECRET_KEY
   )
 }
 
@@ -112,9 +113,7 @@ export const clerkAuthProvider: AuthProvider = {
   },
 
   validateDeleteUserConfig(): string | null {
-    return isClerkConfigured()
-      ? null
-      : 'Clerk credentials are not configured.'
+    return isClerkConfigured() ? null : 'Clerk credentials are not configured.'
   },
 
   async canDeleteUser(): Promise<string | null> {

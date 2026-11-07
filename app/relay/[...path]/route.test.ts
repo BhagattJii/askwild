@@ -3,6 +3,7 @@ import { NextRequest } from 'next/server'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { cappedBody } from '@/lib/analytics/capped-body'
+
 import { GET, POST } from './route'
 
 function upstreamResponse() {

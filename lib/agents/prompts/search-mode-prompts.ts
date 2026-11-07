@@ -93,7 +93,9 @@ const DEFAULT_USER_PROMPT_PREFERENCES: UserPromptPreferences = {
   autosuggest: true
 }
 
-function relatedQuestionsSpec(prefs: UserPromptPreferences | undefined): string {
+function relatedQuestionsSpec(
+  prefs: UserPromptPreferences | undefined
+): string {
   const autosuggest =
     prefs?.autosuggest ?? DEFAULT_USER_PROMPT_PREFERENCES.autosuggest
   return autosuggest === false ? '' : getRelatedQuestionsSpecPrompt()

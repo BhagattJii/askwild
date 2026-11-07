@@ -24,9 +24,11 @@ Ask a question, get an AI-generated answer with cited sources. No logs, no track
 ## Quick start
 
 ### Use it online
+
 Just visit the live instance and start asking questions. No signup required.
 
 ### Run your own
+
 ```bash
 # Clone and install
 git clone https://github.com/BhagattJii/askwild
@@ -42,6 +44,7 @@ bun dev
 ```
 
 Environment variables (all optional):
+
 - `SEARX_URL` — Your self-hosted search backend URL
 - `OPENROUTER_API_KEY` — For AI-generated answers
 - `TAVILY_API_KEY` — For enhanced search results

@@ -28,9 +28,7 @@ function normalize(
   }
 }
 
-async function readPreferencesByUserId(
-  userId: string
-): Promise<Preferences> {
+async function readPreferencesByUserId(userId: string): Promise<Preferences> {
   try {
     const rows = await withRLS(userId, tx =>
       tx
@@ -109,7 +107,8 @@ export async function updatePreferences(
         .values({
           userId: user.id,
           ...next,
-          responseLanguage: next.responseLanguage ?? DEFAULT_PREFERENCES.responseLanguage,
+          responseLanguage:
+            next.responseLanguage ?? DEFAULT_PREFERENCES.responseLanguage,
           autosuggest: next.autosuggest ?? DEFAULT_PREFERENCES.autosuggest,
           bio: next.bio ?? DEFAULT_PREFERENCES.bio,
           updatedAt: new Date()

@@ -45,7 +45,9 @@ export default function UserProfile({ user }: UserProfileProps) {
             <div className="relative shrink-0">
               <Avatar className="size-9">
                 <AvatarImage src={avatarUrl} alt={userName} />
-                <AvatarFallback>{getInitials(userName, user.email)}</AvatarFallback>
+                <AvatarFallback>
+                  {getInitials(userName, user.email)}
+                </AvatarFallback>
               </Avatar>
               {isLow && (
                 <span

@@ -24,9 +24,8 @@ export interface CatalogModel extends Model {
   tier: CatalogTier
 }
 
-const models: CatalogModel[] = (
-  catalogConfig as { models: CatalogModel[] }
-).models
+const models: CatalogModel[] = (catalogConfig as { models: CatalogModel[] })
+  .models
 
 const modelsById: Map<string, CatalogModel> = new Map(
   models.map(model => [model.id, model])
@@ -38,9 +37,7 @@ function modelKeyOf(model: Model): string {
 
 /** All models in the guest-visible catalog, small to large. */
 export function getModelCatalog(): CatalogModel[] {
-  return [...models].sort(
-    (a, b) => TIER_RANK[a.tier] - TIER_RANK[b.tier]
-  )
+  return [...models].sort((a, b) => TIER_RANK[a.tier] - TIER_RANK[b.tier])
 }
 
 /**

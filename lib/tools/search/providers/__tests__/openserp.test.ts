@@ -85,8 +85,18 @@ describe('OpenserpSearchProvider', () => {
     fetchMock.mockResolvedValue(
       jsonResponse({
         results: [
-          { rank: 1, type: 'organic', title: 'keep', url: 'https://a.example/keep' },
-          { rank: 2, type: 'organic', title: 'drop', url: 'https://z.example/drop' }
+          {
+            rank: 1,
+            type: 'organic',
+            title: 'keep',
+            url: 'https://a.example/keep'
+          },
+          {
+            rank: 2,
+            type: 'organic',
+            title: 'drop',
+            url: 'https://z.example/drop'
+          }
         ]
       })
     )
@@ -94,6 +104,32 @@ describe('OpenserpSearchProvider', () => {
     const result = await provider.search('query', 5, 'basic', ['a.example'])
 
     expect(result.results.map(r => r.url)).toEqual(['https://a.example/keep'])
+  })
+
+  it('does not abort a request answered by a cold free-tier service', async () => {
+    // Render free-tier services sleep after ~15min idle; the first request
+    // after sleep took 35s in production and was aborted by the old 30s
+    // default timeout, surfacing as a failed search to the user.
+    vi.useFakeTimers()
+    const signals: AbortSignal[] = []
+    fetchMock.mockImplementation((_input: unknown, init: unknown) => {
+      const signal = (init as { signal?: AbortSignal } | undefined)?.signal
+      if (signal) signals.push(signal)
+      return new Promise<Response>(() => {})
+    })
+
+    const pending = provider.search('query', 1)
+    pending.catch(() => {})
+
+    await vi.advanceTimersByTimeAsync(35_000)
+    expect(signals[0]?.aborted).toBe(false)
+
+    // The timeout still needs to fire eventually — 95s is far beyond any
+    // real response time, so a hung connection must still be cut off.
+    await vi.advanceTimersByTimeAsync(60_000)
+    expect(signals[0]?.aborted).toBe(true)
+
+    vi.useRealTimers()
   })
 
   it('parses images from the image endpoint with thumbnail fallback', async () => {

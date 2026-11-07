@@ -8,7 +8,8 @@ import {
   createNewsSearchTool,
   createStockQuoteTool,
   createWeatherTool,
-  createWikiSummaryTool
+  createWikiSummaryTool,
+  detectNewsEdition
 } from '@/lib/tools/knowledge'
 
 const originalFetch = globalThis.fetch
@@ -49,7 +50,9 @@ describe('dynamic__wikiSummary', () => {
         title: 'India',
         description: 'Country in South Asia',
         extract: 'India is a country...',
-        content_urls: { desktop: { page: 'https://en.wikipedia.org/wiki/India' } }
+        content_urls: {
+          desktop: { page: 'https://en.wikipedia.org/wiki/India' }
+        }
       })
     )
 
@@ -170,6 +173,50 @@ describe('dynamic__stockQuote', () => {
   })
 })
 
+describe('detectNewsEdition', () => {
+  it('detects a named country in its local language edition', () => {
+    expect(detectNewsEdition('japan earthquake').ceid).toBe('JP:ja')
+    expect(detectNewsEdition('france greves').ceid).toBe('FR:fr')
+    expect(detectNewsEdition('noticias de mexico').ceid).toBe('MX:es-419')
+    expect(detectNewsEdition('brasil eleicoes').ceid).toBe('BR:pt-BR')
+  })
+
+  it('keeps English editions for English-speaking countries', () => {
+    expect(detectNewsEdition('australia floods').ceid).toBe('AU:en')
+    expect(detectNewsEdition('united states election').ceid).toBe('US:en')
+    expect(detectNewsEdition('usa shutdown').ceid).toBe('US:en')
+  })
+
+  it('still resolves India when the query names India', () => {
+    expect(detectNewsEdition('india markets').ceid).toBe('IN:en')
+  })
+
+  it('uses the first named country when several appear', () => {
+    expect(detectNewsEdition('india vs australia cricket').ceid).toBe('IN:en')
+  })
+
+  it('falls back to the neutral global edition, not India', () => {
+    expect(detectNewsEdition('top news').ceid).toBe('US:en')
+    expect(detectNewsEdition('breaking').gl).toBe('US')
+    expect(detectNewsEdition('climate summit').ceid).toBe('US:en')
+  })
+
+  it('uses full locale codes because bare hl=en returns no items', () => {
+    expect(detectNewsEdition('top news').hl).toBe('en-US')
+    expect(detectNewsEdition('silicon valley ai').hl).toBe('en-US')
+    expect(detectNewsEdition('india markets').hl).toBe('en-IN')
+    expect(detectNewsEdition('australia floods').hl).toBe('en-AU')
+  })
+
+  it('gives Devanagari queries the Hindi India edition', () => {
+    expect(detectNewsEdition('आज की खबर')).toEqual({
+      hl: 'hi',
+      gl: 'IN',
+      ceid: 'IN:hi'
+    })
+  })
+})
+
 describe('dynamic__newsSearch', () => {
   it('parses google news rss items', async () => {
     fetchMock.mockResolvedValue(
@@ -189,6 +236,25 @@ describe('dynamic__newsSearch', () => {
     expect(result.items).toHaveLength(2)
     expect(result.items[0].title).toBe('Market rallies on policy hopes')
     expect(result.items[0].source).toBe('Example News')
+  })
+
+  it('queries the detected country edition instead of India', async () => {
+    fetchMock.mockResolvedValue(
+      textResponse(`<?xml version="1.0"?>
+<rss version="2.0"><channel><title>news</title>
+<item><title><![CDATA[Typhoon warning issued]]></title><link>https://example.com/jp</link><pubDate>Thu, 05 Nov 2026 10:00:00 GMT</pubDate><source url="https://example.jp">NHK</source></item>
+</channel></rss>`)
+    )
+
+    const result = await toolCall(createNewsSearchTool(), {
+      query: 'japan typhoon',
+      maxResults: 3
+    })
+
+    expect(result.ok).toBe(true)
+    const calledUrl = String(fetchMock.mock.calls[0][0])
+    expect(calledUrl).toContain('ceid=JP%3Aja')
+    expect(calledUrl).not.toContain('ceid=IN%3Aen')
   })
 })
 

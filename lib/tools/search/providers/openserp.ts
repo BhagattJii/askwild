@@ -1,6 +1,4 @@
-import {
-  SearchResults
-} from '@/lib/types'
+import { SearchResults } from '@/lib/types'
 
 import { BaseSearchProvider } from './base'
 
@@ -83,7 +81,9 @@ export class OpenserpSearchProvider extends BaseSearchProvider {
   constructor() {
     super()
     this.baseUrl = process.env.OPENSERP_URL?.replace(/\/+$/, '')
-    this.engines = (process.env.OPENSERP_ENGINES?.trim() || DEFAULT_ENGINES.join(','))
+    this.engines = (
+      process.env.OPENSERP_ENGINES?.trim() || DEFAULT_ENGINES.join(',')
+    )
       .split(',')
       .map(engine => engine.trim())
       .filter(Boolean)
@@ -92,8 +92,12 @@ export class OpenserpSearchProvider extends BaseSearchProvider {
       this.engines = [...DEFAULT_ENGINES]
     }
 
-    const timeout = Number(process.env.OPENSERP_TIMEOUT_MS ?? '30000')
-    this.timeoutMs = Number.isFinite(timeout) && timeout > 0 ? timeout : 30000
+    // Render free-tier services sleep after ~15 minutes of inactivity and
+    // take 30s+ to answer the first request. The old 30s default aborted
+    // those cold-start responses, so the timeout tolerates a cold boot and
+    // still cuts genuinely hung connections.
+    const timeout = Number(process.env.OPENSERP_TIMEOUT_MS ?? '90000')
+    this.timeoutMs = Number.isFinite(timeout) && timeout > 0 ? timeout : 90000
   }
 
   isAvailable(): boolean {
@@ -158,12 +162,10 @@ export class OpenserpSearchProvider extends BaseSearchProvider {
     })) as OpenserpImageResponse
   }
 
-  private splitContentTypes(
-    options?: {
-      type?: 'general' | 'optimized'
-      content_types?: Array<'web' | 'video' | 'image' | 'news'>
-    }
-  ): Array<'web' | 'image'> {
+  private splitContentTypes(options?: {
+    type?: 'general' | 'optimized'
+    content_types?: Array<'web' | 'video' | 'image' | 'news'>
+  }): Array<'web' | 'image'> {
     const contentTypes = options?.content_types ?? ['web']
     const out: Array<'web' | 'image'> = []
     if (contentTypes.includes('web') || contentTypes.includes('news')) {
@@ -180,7 +182,9 @@ export class OpenserpSearchProvider extends BaseSearchProvider {
     try {
       const host = new URL(url).hostname
       return domains.some(domain =>
-        domain.startsWith('.') ? host.endsWith(domain) : host === domain || host.endsWith(`.${domain}`)
+        domain.startsWith('.')
+          ? host.endsWith(domain)
+          : host === domain || host.endsWith(`.${domain}`)
       )
     } catch {
       return false
@@ -227,7 +231,8 @@ export class OpenserpSearchProvider extends BaseSearchProvider {
                   item &&
                   typeof item.url === 'string' &&
                   item.url.length > 0 &&
-                  (inDomains.size === 0 || this.matchesDomains(item.url, include)) &&
+                  (inDomains.size === 0 ||
+                    this.matchesDomains(item.url, include)) &&
                   !excludeHost(item.url, exclude)
               )
               if (filtered.length > 0) {
@@ -235,7 +240,9 @@ export class OpenserpSearchProvider extends BaseSearchProvider {
                   title: item.title ?? '',
                   url: item.url,
                   content: item.snippet ?? item.description ?? '',
-                  ...(item.published_date ? { publishedDate: item.published_date } : {})
+                  ...(item.published_date
+                    ? { publishedDate: item.published_date }
+                    : {})
                 }))
                 return
               }
@@ -268,7 +275,10 @@ export class OpenserpSearchProvider extends BaseSearchProvider {
                   }
                 })
               if (filtered.length > 0) {
-                results.images = Array.from(new Set(filtered)).slice(0, maxResults)
+                results.images = Array.from(new Set(filtered)).slice(
+                  0,
+                  maxResults
+                )
                 return
               }
             } catch (error) {

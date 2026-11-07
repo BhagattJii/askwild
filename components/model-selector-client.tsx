@@ -199,10 +199,7 @@ export function ModelSelectorClient({
                         setOpen(false)
                         router.refresh()
                       }}
-                      className={cn(
-                        'cursor-pointer',
-                        isLocked && 'opacity-80'
-                      )}
+                      className={cn('cursor-pointer', isLocked && 'opacity-80')}
                     >
                       <Check
                         className={cn(

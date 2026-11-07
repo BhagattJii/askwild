@@ -67,17 +67,15 @@ export function createWorldEventsTool() {
               }
             }>
           }
-          result.earthquakes = (data?.features ?? [])
-            .slice(0, 10)
-            .map((f) => ({
-              magnitude: f.properties?.mag ?? null,
-              place: f.properties?.place ?? null,
-              time: f.properties?.time
-                ? new Date(f.properties.time).toISOString()
-                : null,
-              url: f.properties?.url ?? null,
-              tsunami: f.properties?.tsunami ?? 0
-            }))
+          result.earthquakes = (data?.features ?? []).slice(0, 10).map(f => ({
+            magnitude: f.properties?.mag ?? null,
+            place: f.properties?.place ?? null,
+            time: f.properties?.time
+              ? new Date(f.properties.time).toISOString()
+              : null,
+            url: f.properties?.url ?? null,
+            tsunami: f.properties?.tsunami ?? 0
+          }))
         } catch {
           // Feed unavailable — keep the other half.
         }
@@ -95,7 +93,7 @@ export function createWorldEventsTool() {
               link?: string
             }>
           }
-          result.disasters = (data?.events ?? []).map((e) => ({
+          result.disasters = (data?.events ?? []).map(e => ({
             title: e.title ?? 'Unknown event',
             category: e.categories?.[0]?.title ?? null,
             date: e.geometries?.at(-1)?.date ?? null,
