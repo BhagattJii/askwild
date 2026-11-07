@@ -136,7 +136,7 @@ export function createResearcher({
     switch (searchMode) {
       case 'quick':
         console.log(
-          '[Researcher] Quick mode: maxSteps=20, tools=[search, fetch, knowledge, editDraft]'
+          '[Researcher] Quick mode: maxSteps=7, tools=[search, fetch, knowledge, editDraft]'
         )
         systemPrompt = getQuickModePrompt(userPreferences)
         activeToolsList = [
@@ -145,7 +145,10 @@ export function createResearcher({
           ...knowledgeToolNames,
           'editDraft'
         ]
-        maxSteps = 20
+        // Hard cap: quick mode is one search (+ one optional retry) plus the
+        // final answer. Without a tight cap a confused model can chain five
+        // five-second searches and the user watches a spinner for minutes.
+        maxSteps = 7
         searchTool = wrapSearchToolForQuickMode(originalSearchTool)
         break
 
