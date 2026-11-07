@@ -37,7 +37,7 @@ describe('model catalog', () => {
       'medium',
       'large'
     ])
-    expect(catalog[0].id).toBe('nvidia/nemotron-3.5-lightning-30b-a3b')
+    expect(catalog[0].id).toBe('nvidia/nemotron-3.5-bolt-e4b')
     expect(catalog[2].id).toBe('nvidia/nemotron-3-ultra-550b-a55b')
   })
 
@@ -63,7 +63,7 @@ describe('model catalog', () => {
     const selected = selectCatalogModel({ cookieStore: store, isGuest: true })
 
     expect(selected.tier).toBe('small')
-    expect(selected.id).toBe('nvidia/nemotron-3.5-lightning-30b-a3b')
+    expect(selected.id).toBe('nvidia/nemotron-3.5-bolt-e4b')
   })
 
   it('gives signed-in users their saved catalog model', () => {

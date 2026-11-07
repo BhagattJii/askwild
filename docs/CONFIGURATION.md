@@ -586,7 +586,7 @@ tiers from the OpenAI-compatible provider (`config/models/catalog.json`):
 
 | Tier   | Model                                                                            | Access                             |
 | ------ | -------------------------------------------------------------------------------- | ---------------------------------- |
-| Small  | `nvidia/nemotron-3.5-lightning-30b-a3b` (Nemotron 3.5 Lightning)                 | Everyone, including guests         |
+| Small  | `nvidia/nemotron-3.5-bolt-e4b` (Nemotron 3.5 Bolt E4B)                           | Everyone, including guests         |
 | Medium | `nvidia/nemotron-3-nano-omni-30b-a3b-reasoning` (Nemotron 3 Nano Omni Reasoning) | Signed-in only (locked for guests) |
 | Large  | `nvidia/nemotron-3-ultra-550b-a55b` (Nemotron 3 Ultra 550B)                      | Signed-in only (locked for guests) |
 
@@ -603,9 +603,14 @@ Rules:
   default 3600/day), `OVERALL_CHAT_DAILY_LIMIT`, and, if configured, the
   monthly usage budget. Admins and `ASKWILD_ADMIN_EMAILS` are exempt.
 
-The guest tier was promoted from `nemotron-3.5-bolt-e4b` (Nemotron 3.5 Bolt,
-4B) because Bolt cannot call tools reliably — it hallucinated instead of
-invoking the weather tool. Lightning answers with live data as expected.
+The guest tier was moved from `nemotron-3.5-lightning-30b-a3b` (Nemotron 3.5
+Lightning) to `nemotron-3.5-bolt-e4b` (Nemotron 3.5 Bolt E4B) for latency.
+Measured against NIM (Nov 7 2026): a tool-calling step costs ~0.5s on Bolt
+vs ~3s on Lightning, and a 700-token answer step ~5.6s vs ~10.6s. Bolt
+emits both the `search` and `dynamic__weather` tool calls the app depends
+on (the earlier Lightning promotion was made on a tool-calling claim that
+does not reproduce in direct tests), and Lightning burned its completion
+budget on empty output under long prompts.
 
 ## Other Features
 
