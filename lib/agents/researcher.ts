@@ -166,7 +166,7 @@ export function createResearcher({
     switch (searchMode) {
       case 'quick':
         console.log(
-          '[Researcher] Quick mode: maxSteps=4, tools=[search, fetch, knowledge, editDraft]'
+          '[Researcher] Quick mode: maxSteps=8, tools=[search, fetch, knowledge, editDraft]'
         )
         systemPrompt = getQuickModePrompt(userPreferences)
         activeToolsList = [
@@ -175,10 +175,12 @@ export function createResearcher({
           ...knowledgeToolNames,
           'editDraft'
         ]
-        // Hard cap: one search, one optional retry, one answer. On this
-        // engine a fresh scrape costs 20-38s, so a loose cap let the model
-        // burn minutes re-searching the same topic from new angles.
-        maxSteps = 4
+        // Budget in steps, not seconds: the search lane is now ~1s, so a
+        // loop of eight fast steps still lands in well under a minute.
+        // The cap exists to bound runaway re-searching, not to strangle
+        // the final answer, and truncating mid-tool leaves the user with
+        // no text at all.
+        maxSteps = 8
         searchTool = wrapSearchToolForQuickMode(
           originalSearchTool,
           labelAllocator
