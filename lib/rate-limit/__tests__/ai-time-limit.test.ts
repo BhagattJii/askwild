@@ -123,9 +123,13 @@ describe('ai time limit', () => {
     mockRedisIncrby.mockResolvedValue(5)
     mockRedisExpire.mockResolvedValue(1)
 
+    // A real model stream takes hundreds of milliseconds; a stream that
+    // closes inside the same Date.now() millisecond charges nothing, so
+    // emulate a realistic stream here or the 0s window skips the charge.
     const original = new ReadableStream<Uint8Array>({
-      start(controller) {
+      async start(controller) {
         controller.enqueue(new TextEncoder().encode('data: hello\n\n'))
+        await new Promise(resolve => setTimeout(resolve, 20))
         controller.close()
       }
     })
