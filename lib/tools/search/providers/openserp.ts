@@ -1,6 +1,7 @@
 import { SearchResults } from '@/lib/types'
 
 import { BaseSearchProvider } from './base'
+import { getCachedResults, putCachedResults } from './openserp-cache'
 
 interface OpenserpWebResult {
   rank: number
@@ -205,6 +206,23 @@ export class OpenserpSearchProvider extends BaseSearchProvider {
     this.validateApiUrl(this.baseUrl, 'OPENSERP')
 
     const requestedTypes = this.splitContentTypes(options)
+
+    // Repeat queries hit the anti-bot pipeline behind the rendered SERP;
+    // a cache of completed result sets saves the 20-38s scrape on every
+    // later ask of the same topic.
+    const cacheKeyEnv = {
+      engines: this.engines.join(','),
+      query,
+      maxResults,
+      types: [...requestedTypes],
+      include: (includeDomains ?? []).filter(Boolean).join(','),
+      exclude: (excludeDomains ?? []).map(d => d.toLowerCase()).join(',')
+    }
+    const cachedResults = await getCachedResults(cacheKeyEnv)
+    if (cachedResults) {
+      return { ...cachedResults, query, fromCache: true }
+    }
+
     const results: SearchResults = {
       results: [],
       images: [],
@@ -291,6 +309,7 @@ export class OpenserpSearchProvider extends BaseSearchProvider {
 
     await Promise.all(tasks)
     results.number_of_results = results.results.length
+    void putCachedResults(cacheKeyEnv, results)
     return results
   }
 }
