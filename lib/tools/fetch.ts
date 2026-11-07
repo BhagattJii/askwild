@@ -268,8 +268,11 @@ interface Crawl4aiCrawlResult {
   } | null
 }
 
-const CRAWL4AI_PAGE_TIMEOUT_MS = 30000
-const CRAWL4AI_PDF_TIMEOUT_MS = 60000
+// A quick-mode turn stays useful only if a deep fetch cannot dominate it:
+// the RSS lane already carries the answer content, so a page fetch is a
+// bonus. 15s bounds the page pass, 30s the PDF pass (PDFs parse slower).
+const CRAWL4AI_PAGE_TIMEOUT_MS = 15000
+const CRAWL4AI_PDF_TIMEOUT_MS = 30000
 
 async function postCrawl4ai(
   baseUrl: string,
