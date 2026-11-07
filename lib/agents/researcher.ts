@@ -12,10 +12,15 @@ import { createFetchTool } from '../tools/fetch'
 import { createKnowledgeTools } from '../tools/knowledge'
 import { createQuestionTool } from '../tools/question'
 import { createSearchTool } from '../tools/search'
+import { searchNewsRss } from '../tools/search/news-rss-lane'
 import { createTodoTools } from '../tools/todo'
 import { createWorldTools } from '../tools/world'
 import { SearchMode } from '../types/search'
-import { createCitationLabelAllocator } from '../utils/citation'
+import {
+  assignCitationLabels,
+  type CitationLabelAllocator,
+  createCitationLabelAllocator
+} from '../utils/citation'
 import { getModel } from '../utils/registry'
 import { isTracingEnabled } from '../utils/telemetry'
 
@@ -28,7 +33,7 @@ import {
 // Enhanced wrapper function with better type safety and streaming support
 function wrapSearchToolForQuickMode<
   T extends ReturnType<typeof createSearchTool>
->(originalTool: T): T {
+>(originalTool: T, labelAllocator?: CitationLabelAllocator): T {
   return tool({
     description: originalTool.description,
     inputSchema: originalTool.inputSchema,
@@ -39,6 +44,31 @@ function wrapSearchToolForQuickMode<
       const executeFunc = originalTool.execute
       if (!executeFunc) {
         throw new Error('Search tool execute function is not defined')
+      }
+
+      // Fast lane: Google News RSS answers the current-events class of
+      // queries in ~1s, while the OpenSERP provider needs 20-38s per
+      // fresh scrape. When the feed returns real articles, answer from
+      // it with the same citation labels the slow path would assign.
+      const rssQuery = typeof params.query === 'string' ? params.query : ''
+      const rssMax =
+        typeof params.max_results === 'number' ? params.max_results : 10
+      const rssResults = rssQuery ? await searchNewsRss(rssQuery, rssMax) : null
+      if (rssResults && rssResults.results.length > 0) {
+        if (labelAllocator) {
+          const start = labelAllocator.reserve(rssResults.results.length)
+          rssResults.results = assignCitationLabels(rssResults.results, start)
+        }
+        if (context?.toolCallId) {
+          rssResults.toolCallId = context.toolCallId
+        }
+        yield { state: 'searching' as const, query: params.query }
+        yield {
+          state: 'complete' as const,
+          ...rssResults,
+          provider: 'news-rss'
+        }
+        return
       }
 
       // Force optimized type for quick mode
@@ -149,7 +179,10 @@ export function createResearcher({
         // engine a fresh scrape costs 20-38s, so a loose cap let the model
         // burn minutes re-searching the same topic from new angles.
         maxSteps = 4
-        searchTool = wrapSearchToolForQuickMode(originalSearchTool)
+        searchTool = wrapSearchToolForQuickMode(
+          originalSearchTool,
+          labelAllocator
+        )
         break
 
       case 'adaptive':
