@@ -138,7 +138,11 @@ describe('ai time limit', () => {
     const text = await response.text()
     expect(text).toContain('hello')
 
-    await vi.waitFor(() => expect(mockRedisIncrby).toHaveBeenCalledTimes(1))
+    // The budget charge lands on the async continuation after the stream
+    // closes; slow CI runners need more than the 1s default window.
+    await vi.waitFor(() => expect(mockRedisIncrby).toHaveBeenCalledTimes(1), {
+      timeout: 5000
+    })
   })
 
   it('keeps the original response status and headers', async () => {
