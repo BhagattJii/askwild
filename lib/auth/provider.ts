@@ -7,7 +7,11 @@ import type {
   AuthProviderName
 } from '@/lib/auth/types'
 
-const AUTH_PROVIDER_NAMES: AuthProviderName[] = ['supabase', 'none']
+const AUTH_PROVIDER_NAMES: AuthProviderName[] = [
+  'supabase',
+  'better-auth',
+  'none'
+]
 
 // Providers register here as they ship.
 const providerRegistry: Partial<Record<AuthProviderName, AuthProvider>> = {
