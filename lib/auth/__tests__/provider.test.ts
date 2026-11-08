@@ -158,11 +158,9 @@ describe('auth provider dispatch', () => {
       )
     })
 
-    it('refuses AUTH_PROVIDER=better-auth', () => {
+    it('allows AUTH_PROVIDER=better-auth in the cloud', () => {
       process.env.AUTH_PROVIDER = 'better-auth'
-      expect(() => resolveAuthProviderName()).toThrow(
-        'AUTH_PROVIDER=better-auth is not allowed in ASKWILD_CLOUD_DEPLOYMENT'
-      )
+      expect(resolveAuthProviderName()).toBe('better-auth')
     })
   })
 })
