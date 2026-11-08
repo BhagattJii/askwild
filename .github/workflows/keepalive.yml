@@ -20,15 +20,15 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: Ping OpenSERP search service
+      - name: Ping SearXNG fallback service
         env:
-          ASKWILD_SEARCH_URL: ${{ vars.ASKWILD_SEARCH_URL || 'https://askwild-search-3ynh.onrender.com' }}
+          ASKWILD_SEARCH_URL: ${{ vars.ASKWILD_SEARCH_URL || 'https://askwild-searxng.onrender.com' }}
         run: |
-          # The web search endpoint, not the root: it exercises the real
-          # code path a search tool call takes, including engine selection.
+          # The JSON search endpoint, not the root: it exercises the real
+          # code path the SearXNG provider takes, including engine selection.
           curl -sS --retry 2 --retry-delay 20 --retry-all-errors \
-            --max-time 100 -o /dev/null -w "openserp_status=%{http_code}\n" \
-            "${ASKWILD_SEARCH_URL}/google/search?text=keepalive&limit=1&format=json"
+            --max-time 100 -o /dev/null -w "searxng_status=%{http_code}\n" \
+            "${ASKWILD_SEARCH_URL}/search?text=keepalive&format=json"
 
       - name: Ping deployed app
         env:
