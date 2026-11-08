@@ -136,8 +136,9 @@ export class BingScrapeSearchProvider extends BaseSearchProvider {
       const timer = setTimeout(() => controller.abort(), BING_TIMEOUT_MS)
       const bingUrl = `https://www.bing.com/search?q=${encodeURIComponent(query)}&count=${Math.max(maxResults, 10)}&setlang=en`
       const scraperUrl = process.env.BING_SCRAPER_URL
+      const workerKey = process.env.BING_WORKER_KEY
       const fetchUrl = scraperUrl
-        ? `${scraperUrl}${scraperUrl.includes('?') ? '&' : '?'}u=${encodeURIComponent(bingUrl)}`
+        ? `${scraperUrl}${scraperUrl.includes('?') ? '&' : '?'}u=${encodeURIComponent(bingUrl)}${workerKey ? `&key=${encodeURIComponent(workerKey)}` : ''}`
         : bingUrl
       const response = await fetch(fetchUrl, {
         signal: controller.signal,

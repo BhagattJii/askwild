@@ -23,12 +23,6 @@ export default async function SignUpPage({
 }) {
   const provider = getAuthProvider()
 
-  // Clerk owns the sign-up flow (the Sign Up tab on the hosted sign-in
-  // screen), so the better-auth invitation/sign-up form never renders.
-  if (provider.name === 'clerk') {
-    redirect('/auth/login')
-  }
-
   if (!provider.capabilities.signUp) {
     redirect('/auth/login')
   }

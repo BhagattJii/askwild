@@ -29,8 +29,19 @@ export const SOURCE_CONTEXT_MESSAGE_SUFFIX = '-source-context'
 const SOURCE_CONTEXT_MESSAGE_PREFIX =
   'Source context attached by the application for the preceding answer. This is not a message from the user.'
 
+function normalizeMessageId(message: UIMessage, index: number): UIMessage {
+  if (typeof message.id === 'string' && message.id.length > 0) {
+    return message
+  }
+
+  return { ...message, id: `anonymous-history-${index}` }
+}
+
 export function isSourceContextMessage(message: UIMessage): boolean {
-  return message.id.endsWith(SOURCE_CONTEXT_MESSAGE_SUFFIX)
+  return (
+    typeof message.id === 'string' &&
+    message.id.endsWith(SOURCE_CONTEXT_MESSAGE_SUFFIX)
+  )
 }
 
 function normalizeInlineText(value: string): string {
@@ -209,13 +220,14 @@ export function compactHistoricalMessages(
   answerTextCap: { maxChars?: number } = {}
 ): UIMessage[] {
   const maxChars = answerTextCap.maxChars ?? HISTORY_ANSWER_TEXT_LIMIT
-  const currentTurnIndex = messages.findLastIndex(
+  const normalizedMessages = messages.map(normalizeMessageId)
+  const currentTurnIndex = normalizedMessages.findLastIndex(
     message => message.role === 'user'
   )
   const historyEnd =
-    currentTurnIndex === -1 ? messages.length : currentTurnIndex
+    currentTurnIndex === -1 ? normalizedMessages.length : currentTurnIndex
 
-  return messages.flatMap((message, index) => {
+  return normalizedMessages.flatMap((message, index) => {
     if (message.role !== 'assistant') {
       return [message]
     }
