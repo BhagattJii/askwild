@@ -24,7 +24,15 @@ function enforceCloudDeploymentGuard(
   name: AuthProviderName,
   explicitlyConfigured: boolean
 ): void {
-  if (process.env.ASKWILD_CLOUD_DEPLOYMENT !== 'true' || name === 'supabase') {
+  if (
+    process.env.ASKWILD_CLOUD_DEPLOYMENT !== 'true' ||
+    name === 'supabase' ||
+    // Better Auth is a full auth provider with its own user, session and
+    // role tables: usage budgets and limits resolve users through
+    // getCurrentUser(), which works identically under Better Auth
+    // sessions, so the cloud gate may not block it.
+    name === 'better-auth'
+  ) {
     return
   }
   if (name === 'none' && !explicitlyConfigured) {
