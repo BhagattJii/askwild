@@ -134,16 +134,18 @@ export class BingScrapeSearchProvider extends BaseSearchProvider {
     try {
       const controller = new AbortController()
       const timer = setTimeout(() => controller.abort(), BING_TIMEOUT_MS)
-      const response = await fetch(
-        `https://www.bing.com/search?q=${encodeURIComponent(query)}&count=${Math.max(maxResults, 10)}&setlang=en`,
-        {
-          signal: controller.signal,
-          headers: {
-            'user-agent': UA,
-            'accept-language': 'en-US,en;q=0.9'
-          }
+      const bingUrl = `https://www.bing.com/search?q=${encodeURIComponent(query)}&count=${Math.max(maxResults, 10)}&setlang=en`
+      const scraperUrl = process.env.BING_SCRAPER_URL
+      const fetchUrl = scraperUrl
+        ? `${scraperUrl}${scraperUrl.includes('?') ? '&' : '?'}u=${encodeURIComponent(bingUrl)}`
+        : bingUrl
+      const response = await fetch(fetchUrl, {
+        signal: controller.signal,
+        headers: {
+          'user-agent': UA,
+          'accept-language': 'en-US,en;q=0.9'
         }
-      ).finally(() => clearTimeout(timer))
+      }).finally(() => clearTimeout(timer))
       if (response.ok) {
         const html = await response.text()
         const parsed = parseBingHtml(html)

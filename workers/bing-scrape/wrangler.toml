@@ -1,0 +1,4 @@
+name = "askwild-bing-scrape"
+main = "src/index.js"
+compatibility_date = "2026-01-01"
+account_id = "155f089c2ab28360f82e3e52cca270c7"
