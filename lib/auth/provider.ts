@@ -1,5 +1,4 @@
 import { betterAuthProvider } from '@/lib/auth/providers/better-auth'
-import { clerkAuthProvider } from '@/lib/auth/providers/clerk'
 import { noneAuthProvider } from '@/lib/auth/providers/none'
 import { supabaseAuthProvider } from '@/lib/auth/providers/supabase'
 import type {
@@ -8,18 +7,12 @@ import type {
   AuthProviderName
 } from '@/lib/auth/types'
 
-const AUTH_PROVIDER_NAMES: AuthProviderName[] = [
-  'supabase',
-  'better-auth',
-  'clerk',
-  'none'
-]
+const AUTH_PROVIDER_NAMES: AuthProviderName[] = ['supabase', 'none']
 
 // Providers register here as they ship.
 const providerRegistry: Partial<Record<AuthProviderName, AuthProvider>> = {
   supabase: supabaseAuthProvider,
   'better-auth': betterAuthProvider,
-  clerk: clerkAuthProvider,
   none: noneAuthProvider
 }
 
@@ -27,14 +20,7 @@ function enforceCloudDeploymentGuard(
   name: AuthProviderName,
   explicitlyConfigured: boolean
 ): void {
-  if (
-    process.env.ASKWILD_CLOUD_DEPLOYMENT !== 'true' ||
-    name === 'supabase' ||
-    // Clerk is a full hosted auth provider: usage budgets and limits
-    // resolve users through getCurrentUser(), which works identically
-    // under Clerk sessions, so the cloud gate may not block it.
-    name === 'clerk'
-  ) {
+  if (process.env.ASKWILD_CLOUD_DEPLOYMENT !== 'true' || name === 'supabase') {
     return
   }
   if (name === 'none' && !explicitlyConfigured) {
