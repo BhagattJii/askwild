@@ -257,7 +257,16 @@ export const betterAuthProvider: AuthProvider = {
     // /search hosts the shared-chat pages: app/search/[id]/page.tsx decides
     // visibility (public chats are viewable logged out, private ones are
     // rejected there), so the proxy must not pre-empt that check.
-    const publicPaths = ['/auth', '/share', '/api', '/relay', '/search']
+    const publicPaths = [
+      '/auth',
+      '/share',
+      '/api',
+      '/relay',
+      '/search',
+      '/sitemap.xml',
+      '/robots.txt',
+      '/favicon.ico'
+    ]
     const pathname = request.nextUrl.pathname
 
     if (
