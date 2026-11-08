@@ -1,4 +1,5 @@
 import { SearchProvider } from './base'
+import { BingScrapeSearchProvider } from './bing'
 import { BraveSearchProvider } from './brave'
 import { ExaSearchProvider } from './exa'
 import { FirecrawlSearchProvider } from './firecrawl'
@@ -13,6 +14,7 @@ export type SearchProviderType =
   | 'firecrawl'
   | 'brave'
   | 'openserp'
+  | 'bing'
   | 'news-rss'
 export const DEFAULT_PROVIDER: SearchProviderType = 'tavily'
 
@@ -33,6 +35,8 @@ export function createSearchProvider(
       return new BraveSearchProvider()
     case 'openserp':
       return new OpenserpSearchProvider()
+    case 'bing':
+      return new BingScrapeSearchProvider()
     case 'news-rss':
       throw new Error('news-rss is a wrapper lane, not a standalone provider')
       return new OpenserpSearchProvider()
@@ -44,6 +48,7 @@ export function createSearchProvider(
   }
 }
 
+export { BingScrapeSearchProvider } from './bing'
 export { BraveSearchProvider } from './brave'
 export type { ExaSearchProvider } from './exa'
 export type { FirecrawlSearchProvider } from './firecrawl'
