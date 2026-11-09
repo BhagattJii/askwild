@@ -202,7 +202,7 @@ ${getKnowledgeToolsGuidance()}
 ${getCurrentDateRules()}
 
 Search requirement (MANDATORY):
-- If the user's message contains a URL, start directly with fetch tool - do NOT search first
+- If the user's message contains a URL, search for that page by its title/content — fetch is unavailable in quick mode
 - If the user's message is a question or asks for information/advice/comparison/explanation (not casual chit-chat like "hello", "thanks"), you MUST run at least one search before answering
 - Do NOT answer informational questions based only on internal knowledge; verify with current sources via search and cite
 - Prefer recent sources when recency matters; mention dates when relevant
@@ -212,11 +212,8 @@ Search requirement (MANDATORY):
 - If initial results are insufficient or stale, retry once with a tightened query, then apply the Judgment rule — never a third search
 
 Fetch tool usage:
-- **ONLY use fetch tool when a URL is directly provided by the user in their query**
-- Do NOT use fetch to get more details from search results
-- This keeps responses fast and efficient
-${getPdfFetchGuidance()}
-- **For regular web pages**: Use default \`type: "regular"\` for fast HTML fetching
+- **Fetch is unavailable in quick mode.** If the user's message contains a URL, search for that page's title/content instead — never try to call a fetch tool.
+- Search snippets carry enough content to answer; do not try to open individual result pages.
 
 Citation Format (MANDATORY):
 [number](#label) - Always use this EXACT format
