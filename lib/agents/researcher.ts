@@ -176,21 +176,20 @@ export function createResearcher({
     switch (searchMode) {
       case 'quick':
         console.log(
-          '[Researcher] Quick mode: maxSteps=8, tools=[search, fetch, knowledge, editDraft]'
+          '[Researcher] Quick mode: maxSteps=5, tools=[search, knowledge, editDraft] (fetch removed — snippets suffice, fetching news-redirect URLs only wasted ~20s/run)'
         )
         systemPrompt = getQuickModePrompt(userPreferences)
-        activeToolsList = [
-          'search',
-          'fetch',
-          ...knowledgeToolNames,
-          'editDraft'
-        ]
-        // Budget in steps, not seconds: the search lane is now ~1s, so a
-        // loop of eight fast steps still lands in well under a minute.
-        // The cap exists to bound runaway re-searching, not to strangle
-        // the final answer, and truncating mid-tool leaves the user with
-        // no text at all.
-        maxSteps = 8
+        // Fetch is intentionally NOT active in quick mode: the prompt says
+        // "fetch only URLs the user pasted", yet the model fetched Google
+        // News redirect links twice in one run (results=1 junk) — pure
+        // latency. Search snippets already cover the answer; adaptive mode
+        // keeps fetch for deep dives.
+        activeToolsList = [...knowledgeToolNames, 'editDraft']
+        // Budget in steps, not seconds: the search lane is now ~1s, so the
+        // loop is bounded by model turns, not backend time. 5 turns allow
+        // search + one retry + one knowledge tool + answer without the
+        // runaway re-searching that pushed answers past 60s.
+        maxSteps = 5
         searchTool = wrapSearchToolForQuickMode(
           originalSearchTool,
           labelAllocator
