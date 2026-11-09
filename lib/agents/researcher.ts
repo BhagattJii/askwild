@@ -35,6 +35,12 @@ import {
 function wrapSearchToolForQuickMode<
   T extends ReturnType<typeof createSearchTool>
 >(originalTool: T, labelAllocator?: CitationLabelAllocator): T {
+  // Hard search budget for quick mode: ONE real search per request. The
+  // prompt says "one search, then answer", but both medium and large
+  // models kept re-searching after good results (4 searches for a date).
+  // Words don't stop them, so the tool itself refuses a second call: the
+  // model gets an empty result and must answer from the first one.
+  let searchCalls = 0
   return tool({
     description: originalTool.description,
     inputSchema: originalTool.inputSchema,
@@ -45,6 +51,23 @@ function wrapSearchToolForQuickMode<
       const executeFunc = originalTool.execute
       if (!executeFunc) {
         throw new Error('Search tool execute function is not defined')
+      }
+
+      searchCalls += 1
+      if (searchCalls > 1) {
+        console.log(
+          `[Researcher] Quick-mode search budget spent (call #${searchCalls}) — refusing re-search`
+        )
+        yield {
+          state: 'complete' as const,
+          results: [],
+          images: [],
+          videos: [],
+          query: typeof params.query === 'string' ? params.query : '',
+          number_of_results: 0,
+          provider: 'search-budget'
+        }
+        return
       }
 
       // Fast lane: Google News RSS answers the freshness class of queries
@@ -176,7 +199,7 @@ export function createResearcher({
     switch (searchMode) {
       case 'quick':
         console.log(
-          '[Researcher] Quick mode: maxSteps=5, tools=[search, knowledge, editDraft] (fetch removed — snippets suffice, fetching news-redirect URLs only wasted ~20s/run)'
+          '[Researcher] Quick mode: maxSteps=4, tools=[search, knowledge, editDraft] (fetch removed, 1-search hard budget)'
         )
         systemPrompt = getQuickModePrompt(userPreferences)
         // Fetch is intentionally NOT active in quick mode: the prompt says
@@ -186,10 +209,10 @@ export function createResearcher({
         // keeps fetch for deep dives.
         activeToolsList = [...knowledgeToolNames, 'editDraft']
         // Budget in steps, not seconds: the search lane is now ~1s, so the
-        // loop is bounded by model turns, not backend time. 5 turns allow
-        // search + one retry + one knowledge tool + answer without the
-        // runaway re-searching that pushed answers past 60s.
-        maxSteps = 5
+        // loop is bounded by model turns, not backend time. 4 turns allow
+        // search + one knowledge tool + answer (the search wrapper itself
+        // refuses a second search), ending the 60s re-search loops.
+        maxSteps = 4
         searchTool = wrapSearchToolForQuickMode(
           originalSearchTool,
           labelAllocator
