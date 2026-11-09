@@ -31,6 +31,17 @@ const getHostname = (url: string): string => {
   }
 }
 
+function formatCitationDate(raw?: string): string {
+  if (!raw) return ''
+  const parsed = new Date(raw)
+  if (Number.isNaN(parsed.getTime())) return ''
+  return ` · ${parsed.toLocaleDateString('en-IN', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric'
+  })}`
+}
+
 export const CitationLink = memo(function CitationLink({
   href,
   children,
@@ -105,6 +116,7 @@ export const CitationLink = memo(function CitationLink({
                   </Avatar>
                   <span className="text-xs text-muted-foreground truncate">
                     {getHostname(citationData.url)}
+                    {formatCitationDate(citationData.publishedDate)}
                   </span>
                 </div>
                 <p className="text-sm font-medium line-clamp-1">
