@@ -1,6 +1,7 @@
 import { isStepCount, tool, ToolLoopAgent } from 'ai'
 
 import type { DraftVersion } from '@/lib/draft/draft'
+import type { SearchResults } from '@/lib/types'
 import type {
   ResearcherRuntimeContext,
   ResearcherTools
@@ -58,14 +59,17 @@ function wrapSearchToolForQuickMode<
         console.log(
           `[Researcher] Quick-mode search budget spent (call #${searchCalls}) — refusing re-search`
         )
-        yield {
-          state: 'complete' as const,
+        const budgetEmpty: SearchResults = {
           results: [],
           images: [],
           videos: [],
           query: typeof params.query === 'string' ? params.query : '',
-          number_of_results: 0,
-          provider: 'search-budget'
+          number_of_results: 0
+        }
+        yield {
+          state: 'complete' as const,
+          ...budgetEmpty,
+          provider: 'news-rss' as const
         }
         return
       }
