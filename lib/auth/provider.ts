@@ -1,4 +1,5 @@
 import { betterAuthProvider } from '@/lib/auth/providers/better-auth'
+import { clerkAuthProvider } from '@/lib/auth/providers/clerk'
 import { noneAuthProvider } from '@/lib/auth/providers/none'
 import { supabaseAuthProvider } from '@/lib/auth/providers/supabase'
 import type {
@@ -10,6 +11,7 @@ import type {
 const AUTH_PROVIDER_NAMES: AuthProviderName[] = [
   'supabase',
   'better-auth',
+  'clerk',
   'none'
 ]
 
@@ -17,6 +19,7 @@ const AUTH_PROVIDER_NAMES: AuthProviderName[] = [
 const providerRegistry: Partial<Record<AuthProviderName, AuthProvider>> = {
   supabase: supabaseAuthProvider,
   'better-auth': betterAuthProvider,
+  clerk: clerkAuthProvider,
   none: noneAuthProvider
 }
 
@@ -31,7 +34,11 @@ function enforceCloudDeploymentGuard(
     // role tables: usage budgets and limits resolve users through
     // getCurrentUser(), which works identically under Better Auth
     // sessions, so the cloud gate may not block it.
-    name === 'better-auth'
+    name === 'better-auth' ||
+    // Clerk sessions resolve the same way through getCurrentUser(); the
+    // hosted sign-in, social logins and password resets are all owned by
+    // Clerk, so the cloud gate may not block it either.
+    name === 'clerk'
   ) {
     return
   }

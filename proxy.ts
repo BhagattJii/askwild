@@ -4,6 +4,8 @@ import {
   NextResponse
 } from 'next/server'
 
+import { clerkMiddleware } from '@clerk/nextjs/server'
+
 import {
   exceedsRelayBodyCap,
   RELAY_PREFIX,
@@ -58,7 +60,17 @@ export async function proxy(request: NextRequest, event?: NextFetchEvent) {
   const baseUrl = `${protocol}${protocol.endsWith(':') ? '//' : '://'}${host}`
 
   // The active auth provider enforces and refreshes sessions here.
-  const response = await getAuthProvider().handleSession(request)
+  // Under Clerk, clerkMiddleware() resolves and refreshes the session
+  // itself and injects the auth state into request headers for server
+  // components; other providers go through the provider seam.
+  let response: NextResponse
+  if (resolveAuthProviderName() === 'clerk') {
+    const clerkEvent =
+      event ?? ({ waitUntil: () => {} } as unknown as NextFetchEvent)
+    response = (await clerkMiddleware(request, clerkEvent)) as NextResponse
+  } else {
+    response = await getAuthProvider().handleSession(request)
+  }
 
   // Add request information to response headers
   response.headers.set('x-url', request.url)

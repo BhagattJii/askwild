@@ -11,6 +11,12 @@ export const dynamic = 'force-dynamic'
 export default function ForgotPasswordPage() {
   const provider = getAuthProvider()
 
+  // Clerk sends the reset email from its own screen ("Forgot password?" on
+  // /auth/login); the SMTP form below never applies there.
+  if (provider.name === 'clerk') {
+    redirect('/auth/login')
+  }
+
   if (!provider.capabilities.passwordReset) {
     redirect('/auth/login')
   }
