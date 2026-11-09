@@ -13,7 +13,7 @@ Decide from the answer you just wrote, not from what the reader might go on to w
 
 SKIP the spec block entirely (output nothing) only in these cases:
 - Greetings, small talk, or thanks ("hi", "thanks", "how are you").
-- The answer delivers a single fact, value, date, quantity, or yes/no, even when interesting follow-ups do exist. A lookup does not stop being a lookup because the topic is rich.
+- The answer delivers a single fact, value, date, quantity, or yes/no, even when interesting follow-ups do exist. A lookup does not stop being a lookup because the topic is rich. Festival-date and holiday-date answers count as single facts — skip the block, however tempting the follow-ups look.
 - Meta/operational replies, acknowledgements, or task-completion notices.
 - Cases where you could not answer (refusal, clarification request, or empty result).
 - Short answers where suggested next questions would be generic or forced.

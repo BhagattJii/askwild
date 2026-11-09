@@ -12,13 +12,15 @@ import { isProviderEnabled } from '@/lib/utils/registry'
 export type CatalogTier = 'small' | 'medium' | 'large'
 
 /**
- * Guests run on the medium tier: the small tier's 4B-class model ignores
+ * Guests run on the large tier: the small tier's 4B-class model ignores
  * system-prompt rules (asks "which year?" with the date in the prompt,
  * answers English to a Hindi question) — the exact failure mode that
- * makes an answer engine feel broken. Medium reasoning keeps latency
- * reasonable while actually following instructions.
+ * makes an answer engine feel broken. The medium tier follows rules but
+ * its reasoning mode + 3-round re-searching pushes answers to ~60s.
+ * Large (550B, reasoning off) follows instructions AND answers fast, so
+ * guests get the big model with one search and a sub-minute answer.
  */
-export const GUEST_MAX_TIER: CatalogTier = 'medium'
+export const GUEST_MAX_TIER: CatalogTier = 'large'
 export const GUEST_UNLOCK_TIERS: CatalogTier[] = ['medium', 'large']
 
 const TIER_RANK: Record<CatalogTier, number> = {
@@ -48,8 +50,8 @@ export function getModelCatalog(): CatalogModel[] {
 }
 
 /**
- * Keys a guest may not switch to (medium and large tiers). The selector
- * renders these with a lock and opens the sign-in prompt on click.
+ * Keys a guest may not switch to (anything above the guest max tier).
+ * Guests default to the large tier, so nothing is locked for them.
  */
 export function getGuestLockedModelKeys(): string[] {
   return getModelCatalog()
