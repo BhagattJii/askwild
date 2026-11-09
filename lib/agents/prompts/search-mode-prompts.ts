@@ -288,6 +288,8 @@ ${getImageSpecPrompt()}
 ${getSourceCardsSpecPrompt()}
 
 ${relatedQuestionsSpec(prefs)}
+
+FINAL REMINDER (checked before sending): match the user's language exactly — Hindi/Hinglish words in the question mean Hindi (Devanagari) or Hinglish in the answer. Never ask the user for the current year or date ("Current date: ..." in Instructions is authoritative).
 `
 }
 
@@ -477,6 +479,8 @@ ${getImageSpecPrompt()}
 ${getSourceCardsSpecPrompt()}
 
 ${relatedQuestionsSpec(prefs)}
+
+FINAL REMINDER (checked before sending): match the user's language exactly — Hindi/Hinglish words in the question mean Hindi (Devanagari) or Hinglish in the answer. Never ask the user for the current year or date ("Current date: ..." in Instructions is authoritative).
 `
 }
 
