@@ -57,6 +57,7 @@ function getCurrentDateRules(): string {
 - The FIRST search query MUST contain the festival/topic name itself (e.g. "Bhai Dooj 2026 date") — NEVER replace the topic with a date-arithmetic phrase like "day after tomorrow date". One search with the real name beats three searches about the calendar.
 - Competing dates across sources (e.g. 10 vs 11 November): report the tithi window and the date the majority of mainstream Indian sources celebrate, stating the span.
 - Report muhurat timings exactly as found (with a.m./p.m.) and name the outlet that published them.
+- If no source gives an exact muhurat time, say "the exact time was not in these results" — NEVER hedge with "confirm from a panchang/calendar yourself" when a date can be stated.
 - FORBIDDEN: telling the user to "check a calendar / panchang yourself", saying "I cannot determine the date", or asking the user to specify the year. If a search lane fails, use the fallback ladder and still deliver the most probable verified answer.`
 }
 

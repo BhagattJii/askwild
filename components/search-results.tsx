@@ -16,6 +16,19 @@ export interface SearchResultsProps {
   displayMode?: 'grid' | 'list'
 }
 
+/** "9 Nov 2026" — sources carry publisher dates from the news lanes;
+ * Perplexity-style answers always show them, so surfaced cards do too. */
+function formatSourceDate(raw?: string): string | null {
+  if (!raw) return null
+  const parsed = new Date(raw)
+  if (Number.isNaN(parsed.getTime())) return null
+  return parsed.toLocaleDateString('en-IN', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric'
+  })
+}
+
 export function SearchResults({
   results,
   displayMode = 'grid'
@@ -65,6 +78,12 @@ export function SearchResults({
                     <span className="underline">
                       {new URL(result.url).hostname}
                     </span>
+                    {formatSourceDate(result.publishedDate) && (
+                      <span className="no-underline">
+                        {' · '}
+                        {formatSourceDate(result.publishedDate)}
+                      </span>
+                    )}
                   </div>
                 </div>
               </CardContent>
@@ -98,6 +117,9 @@ export function SearchResults({
                   </Avatar>
                   <div className="text-xs opacity-60 truncate min-w-0">
                     {displayUrlName(result.url)}
+                    {formatSourceDate(result.publishedDate) && (
+                      <span> · {formatSourceDate(result.publishedDate)}</span>
+                    )}
                   </div>
                 </div>
               </CardContent>
