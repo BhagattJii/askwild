@@ -43,7 +43,10 @@ function cacheKey(parts: {
     parts.include,
     parts.exclude
   ].join('|')
-  return `aw:search:v1:${encodeURIComponent(raw).slice(0, 512)}`
+  // v2: the first generation cached raw provider output, which sometimes
+  // held a poisoned random SERP for 30 minutes. v2 keys only relevance-
+  // gated result sets, so old poison can never be served again.
+  return `aw:search:v2:${encodeURIComponent(raw).slice(0, 512)}`
 }
 
 function cacheable(value: SearchResults): boolean {

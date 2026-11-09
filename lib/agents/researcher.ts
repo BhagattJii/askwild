@@ -13,6 +13,7 @@ import { createKnowledgeTools } from '../tools/knowledge'
 import { createQuestionTool } from '../tools/question'
 import { createSearchTool } from '../tools/search'
 import { searchNewsRss } from '../tools/search/news-rss-lane'
+import { gateResults, isFreshnessQuery } from '../tools/search/relevance'
 import { createTodoTools } from '../tools/todo'
 import { createWorldTools } from '../tools/world'
 import { SearchMode } from '../types/search'
@@ -46,29 +47,38 @@ function wrapSearchToolForQuickMode<
         throw new Error('Search tool execute function is not defined')
       }
 
-      // Fast lane: Google News RSS answers the current-events class of
-      // queries in ~1s, while the OpenSERP provider needs 20-38s per
-      // fresh scrape. When the feed returns real articles, answer from
-      // it with the same citation labels the slow path would assign.
+      // Fast lane: Google News RSS answers the freshness class of queries
+      // (news, festivals, prices, matches, any explicit year) in ~1s with
+      // real dated articles, while scraping providers need 3-20s and suffer
+      // datacenter poison. Evergreen questions skip this lane: the feed
+      // returns plausible topic-word noise instead of the right answer.
+      // Whatever the feed returns still passes the same relevance gate the
+      // slow-path lanes use, so a junk feed can never reach the model.
       const rssQuery = typeof params.query === 'string' ? params.query : ''
       const rssMax =
         typeof params.max_results === 'number' ? params.max_results : 10
-      const rssResults = rssQuery ? await searchNewsRss(rssQuery, rssMax) : null
-      if (rssResults && rssResults.results.length > 0) {
-        if (labelAllocator) {
-          const start = labelAllocator.reserve(rssResults.results.length)
-          rssResults.results = assignCitationLabels(rssResults.results, start)
+      if (rssQuery && isFreshnessQuery(rssQuery)) {
+        const rssResults = await searchNewsRss(rssQuery, rssMax)
+        if (rssResults && rssResults.results.length > 0) {
+          const verdict = gateResults(rssQuery, rssResults.results)
+          if (verdict.quality !== 'fail' && verdict.passing.length > 0) {
+            const gated = { ...rssResults, results: verdict.passing }
+            if (labelAllocator) {
+              const start = labelAllocator.reserve(gated.results.length)
+              gated.results = assignCitationLabels(gated.results, start)
+            }
+            if (context?.toolCallId) {
+              gated.toolCallId = context.toolCallId
+            }
+            yield { state: 'searching' as const, query: params.query }
+            yield {
+              state: 'complete' as const,
+              ...gated,
+              provider: 'news-rss'
+            }
+            return
+          }
         }
-        if (context?.toolCallId) {
-          rssResults.toolCallId = context.toolCallId
-        }
-        yield { state: 'searching' as const, query: params.query }
-        yield {
-          state: 'complete' as const,
-          ...rssResults,
-          provider: 'news-rss'
-        }
-        return
       }
 
       // Force optimized type for quick mode

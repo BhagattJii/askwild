@@ -1,18 +1,30 @@
-import { SearchResults } from '@/lib/types'
+import { SearchResults, SearchResultItem } from '@/lib/types'
 
 import { BaseSearchProvider } from './base'
 import { getCachedResults, putCachedResults } from './openserp-cache'
 import { SearXNGSearchProvider } from './searxng'
+import { gateResults, type RelevanceVerdict } from '../relevance'
+import { searchNewsRss } from '../news-rss-lane'
 
 /**
- * Keyless Bing lane. Bing serves server-rendered SERP markup to plain
- * HTTP requests — no browser, no API key. The provider is deliberately
- * self-contained (single fetch, tolerant parse, cache for repeats) so a
- * Bing-side structure change degrades to an empty result set that the
- * caller treats as "no lane available" instead of failing the request.
+ * Keyless Bing lane with a relevance-gated ladder.
+ *
+ * Bing serves server-rendered SERP markup to plain HTTP requests — no
+ * browser, no API key. But from datacenter egress IPs (Cloudflare Workers,
+ * Render) it intermittently serves a random cached SERP — car rankings,
+ * dictionary entries, LinkedIn profiles — for an unrelated query. The
+ * SearXNG mirror degrades the same way under rate limits.
+ *
+ * So this provider no longer trusts any single lane. Every lane's results
+ * pass through a query-term relevance gate (lib/tools/search/relevance.ts)
+ * and the ladder walks: Bing → Bing with a second parameter variant →
+ * SearXNG → Google News RSS. The first strong lane wins; weaker evidence is
+ * returned untouched but never cached, so junk results can't poison later
+ * requests.
  */
 
 const BING_TIMEOUT_MS = 8000
+const SEARXNG_LADDER_CAP_MS = 12000
 const UA =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36'
 
@@ -88,6 +100,41 @@ function stripTags(html: string): string {
     .trim()
 }
 
+/** Rejects a promise after `ms`; the loser keeps running but is ignored. */
+function withTimeout<T>(promise: Promise<T>, ms: number, fallback: T): Promise<T> {
+  return new Promise<T>(resolve => {
+    const timer = setTimeout(() => resolve(fallback), ms)
+    promise
+      .then(value => {
+        clearTimeout(timer)
+        resolve(value)
+      })
+      .catch(() => {
+        clearTimeout(timer)
+        resolve(fallback)
+      })
+  })
+}
+
+interface LaneResult {
+  lane: string
+  verdict: RelevanceVerdict
+}
+
+/** Best lane by (quality, passing count); earlier lanes win ties. */
+function pickBest(lanes: LaneResult[]): LaneResult | null {
+  const rank = { strong: 3, weak: 2, fail: 1 } as const
+  return lanes.reduce<LaneResult | null>(
+    (best, current) => {
+      if (!best) return current
+      const currentScore = rank[current.verdict.quality] * 100 + current.verdict.passing.length
+      const bestScore = rank[best.verdict.quality] * 100 + best.verdict.passing.length
+      return currentScore > bestScore ? current : best
+    },
+    null
+  )
+}
+
 export class BingScrapeSearchProvider extends BaseSearchProvider {
   async search(
     query: string,
@@ -131,73 +178,146 @@ export class BingScrapeSearchProvider extends BaseSearchProvider {
       return results
     }
 
-    try {
-      const controller = new AbortController()
-      const timer = setTimeout(() => controller.abort(), BING_TIMEOUT_MS)
-      const bingUrl = `https://www.bing.com/search?q=${encodeURIComponent(query)}&count=${Math.max(maxResults, 10)}&setlang=en`
-      const scraperUrl = process.env.BING_SCRAPER_URL
-      const workerKey = process.env.BING_WORKER_KEY
-      const fetchUrl = scraperUrl
-        ? `${scraperUrl}${scraperUrl.includes('?') ? '&' : '?'}u=${encodeURIComponent(bingUrl)}${workerKey ? `&key=${encodeURIComponent(workerKey)}` : ''}`
-        : bingUrl
-      const response = await fetch(fetchUrl, {
-        signal: controller.signal,
-        headers: {
-          'user-agent': UA,
-          'accept-language': 'en-US,en;q=0.9'
-        }
-      }).finally(() => clearTimeout(timer))
-      if (response.ok) {
-        const html = await response.text()
-        const parsed = parseBingHtml(html)
-        const include = (includeDomains ?? []).filter(Boolean)
-        const exclude = (excludeDomains ?? []).map(d => d.toLowerCase())
-        results.results = parsed.results
-          .filter(item => {
-            if (include.length > 0 && !matchesDomains(item.url, include)) {
-              return false
-            }
-            return !excludeHost(item.url, exclude)
-          })
-          .slice(0, maxResults)
-      } else {
-        console.error(`Bing scrape web search failed: HTTP ${response.status}`)
-      }
-    } catch (error) {
-      console.error('Bing scrape web search failed:', error)
+    const include = (includeDomains ?? []).filter(Boolean)
+    const exclude = (excludeDomains ?? []).map(d => d.toLowerCase())
+    const domainOk = (item: { url: string }): boolean => {
+      if (include.length > 0 && !matchesDomains(item.url, include)) return false
+      return !excludeHost(item.url, exclude)
     }
 
-    results.number_of_results = results.results.length
+    const bingSerpUrl = (params: string): string =>
+      `https://www.bing.com/search?q=${encodeURIComponent(query)}&${params}`
 
-    // Secondary lane: when Bing yields almost nothing (soft block, layout
-    // change), the configured SearXNG API mirrors the query instead so the
-    // answer never degrades to "no lane available" while a host keyless.
-    if (results.results.length < 2 && requestedTypes.has('web')) {
+    const attemptBing = async (params: string): Promise<LaneResult> => {
+      const html = await fetchBingHtml(bingSerpUrl(params))
+      if (!html) return { lane: 'bing', verdict: { passing: [], quality: 'fail' } }
+      const parsed = parseBingHtml(html).results.filter(domainOk)
+      const verdict = gateResults(query, parsed)
+      console.log(
+        `[SearchLadder] bing(${params.slice(0, 24)}…) → ${verdict.quality}, ${verdict.passing.length}/${parsed.length} relevant`
+      )
+      return { lane: 'bing', verdict }
+    }
+
+    const attemptSearxng = async (): Promise<LaneResult> => {
       const searxngUrl = process.env.SEARXNG_API_URL
-      if (searxngUrl) {
-        try {
-          const fallback = new SearXNGSearchProvider()
-          const secondary = await fallback.search(
+      if (!searxngUrl) {
+        return { lane: 'searxng', verdict: { passing: [], quality: 'fail' } }
+      }
+      try {
+        const fallback = new SearXNGSearchProvider()
+        const secondary = await withTimeout(
+          fallback.search(
             query,
             maxResults,
             _searchDepth === 'advanced' ? 'advanced' : 'basic',
             includeDomains ?? [],
             excludeDomains ?? []
-          )
-          if (secondary.results.length > 0) {
-            results.results = secondary.results.slice(0, maxResults)
-            results.number_of_results = results.results.length
-          }
-        } catch (error) {
-          console.error('SearXNG secondary lane failed:', error)
+          ),
+          SEARXNG_LADDER_CAP_MS,
+          null
+        )
+        if (!secondary || !Array.isArray(secondary.results)) {
+          return { lane: 'searxng', verdict: { passing: [], quality: 'fail' } }
         }
+        const parsed = secondary.results
+          .filter(domainOk)
+          .slice(0, maxResults) as SearchResultItem[]
+        const verdict = gateResults(query, parsed)
+        console.log(
+          `[SearchLadder] searxng → ${verdict.quality}, ${verdict.passing.length}/${parsed.length} relevant`
+        )
+        return { lane: 'searxng', verdict }
+      } catch (error) {
+        console.error('SearXNG secondary lane failed:', error)
+        return { lane: 'searxng', verdict: { passing: [], quality: 'fail' } }
       }
     }
 
-    if (results.results.length > 0) {
+    const attemptNewsRss = async (): Promise<LaneResult> => {
+      try {
+        const rss = await searchNewsRss(query, maxResults)
+        if (!rss || !Array.isArray(rss.results)) {
+          return { lane: 'news-rss', verdict: { passing: [], quality: 'fail' } }
+        }
+        const parsed = rss.results.filter(domainOk).slice(0, maxResults)
+        const verdict = gateResults(query, parsed)
+        console.log(
+          `[SearchLadder] news-rss → ${verdict.quality}, ${verdict.passing.length}/${parsed.length} relevant`
+        )
+        return { lane: 'news-rss', verdict }
+      } catch (error) {
+        console.error('News RSS ladder lane failed:', error)
+        return { lane: 'news-rss', verdict: { passing: [], quality: 'fail' } }
+      }
+    }
+
+    // Ladder: primary Bing pass → parameter-variant pass (datacenter IPs
+    // get random cached SERPs, so a second variant is a real second chance,
+    // not a duplicate call) → SearXNG → News RSS. First strong lane wins,
+    // otherwise the best weak set is handed to the model uncached.
+    const lanes: LaneResult[] = []
+
+    lanes.push(await attemptBing(`count=${Math.max(maxResults, 10)}&setlang=en`))
+    let best = pickBest(lanes)
+    if (best?.verdict.quality !== 'strong') {
+      lanes.push(
+        await attemptBing(
+          `count=${Math.max(maxResults, 10)}&mkt=en-IN&setlang=en&cc=in`
+        )
+      )
+      best = pickBest(lanes)
+    }
+    if (best?.verdict.quality !== 'strong') {
+      lanes.push(await attemptSearxng())
+      best = pickBest(lanes)
+    }
+    if (best?.verdict.quality !== 'strong') {
+      lanes.push(await attemptNewsRss())
+      best = pickBest(lanes)
+    }
+
+    if (best && best.verdict.passing.length > 0) {
+      results.results = best.verdict.passing.slice(0, maxResults)
+      results.number_of_results = results.results.length
+    }
+
+    // Only strong, query-consistent result sets enter the shared cache;
+    // a poisoned random SERP must not live for 30 minutes in Upstash.
+    if (best?.verdict.quality === 'strong' && results.results.length > 0) {
       void putCachedResults(cacheKeyEnv, results)
     }
+
     return results
+  }
+}
+
+async function fetchBingHtml(bingQueryUrl: string): Promise<string | null> {
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), BING_TIMEOUT_MS)
+  try {
+    const scraperUrl = process.env.BING_SCRAPER_URL
+    const workerKey = process.env.BING_WORKER_KEY
+    const fetchUrl = scraperUrl
+      ? `${scraperUrl}${scraperUrl.includes('?') ? '&' : '?'}u=${encodeURIComponent(bingQueryUrl)}${workerKey ? `&key=${encodeURIComponent(workerKey)}` : ''}`
+      : bingQueryUrl
+    const response = await fetch(fetchUrl, {
+      signal: controller.signal,
+      headers: {
+        'user-agent': UA,
+        'accept-language': 'en-US,en;q=0.9'
+      }
+    })
+    if (!response.ok) {
+      console.error(`Bing scrape web search failed: HTTP ${response.status}`)
+      return null
+    }
+    return await response.text()
+  } catch (error) {
+    console.error('Bing scrape web search failed:', error)
+    return null
+  } finally {
+    clearTimeout(timer)
   }
 }
 
