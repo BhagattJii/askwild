@@ -1,4 +1,4 @@
-import { SearchResults } from '@/lib/types'
+import type { SearchResults } from '@/lib/types'
 
 export interface SearchProvider {
   search(

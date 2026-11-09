@@ -13,6 +13,8 @@
 
 import type { SearchResults } from '@/lib/types'
 
+import { extractQueryTerms, isFreshnessQuery } from './relevance'
+
 const RSS_TIMEOUT_MS = 6000
 const MIN_RSS_RESULTS = 2
 
@@ -73,8 +75,14 @@ export async function searchNewsRss(
   maxResults: number = 10
 ): Promise<SearchResults | null> {
   const edition = detectEdition(query)
+  // Google News search is poisoned by Hinglish glue words: "Bhai Dooj 2026
+  // kab hai" returns 12 mostly-stale items while the cleaned "Bhai Dooj
+  // 2026" returns 69 with the top 8 all fresh. Search with the query's own
+  // distinctive terms only (falls back to the raw query if none survive).
+  const cleaned = extractQueryTerms(query).any.join(' ')
+  const searchQuery = cleaned || query
   const url = new URL('https://news.google.com/rss/search')
-  url.searchParams.set('q', query)
+  url.searchParams.set('q', searchQuery)
   url.searchParams.set('hl', edition.hl)
   url.searchParams.set('gl', edition.gl)
   url.searchParams.set('ceid', edition.ceid)
@@ -104,7 +112,17 @@ export async function searchNewsRss(
       number_of_results: 0
     }
 
-    for (const item of items.slice(0, Math.max(maxResults, 10))) {
+    interface ParsedItem {
+      title: string
+      url: string
+      content: string
+      publishedDate?: string
+      timestamp: number
+    }
+
+    const parsed: ParsedItem[] = []
+
+    for (const item of items.slice(0, Math.max(maxResults, 20))) {
       const title = matchGroup(item, 'title')
       const link = matchGroup(item, 'link')
       if (!title || !link) continue
@@ -120,11 +138,38 @@ export async function searchNewsRss(
         .filter(Boolean)
         .join(' — ')
 
-      results.results.push({
+      parsed.push({
         title,
         url: link,
         content,
-        ...(pubDate ? { publishedDate: pubDate } : {})
+        publishedDate: pubDate || undefined,
+        timestamp: pubDate ? Date.parse(pubDate) : Number.NaN
+      })
+    }
+
+    // Google News ranks by keyword match, NOT by recency — so "Bhai Dooj
+    // 2026" happily returns March's Holi Bhai Dooj articles months later.
+    // For freshness/festival queries, keep only the last 90 days (sorted
+    // newest-first). If that leaves too little, return null so the caller
+    // can try another lane instead of serving the wrong festival.
+    let candidates = parsed
+    if (isFreshnessQuery(query)) {
+      const cutoff = Date.now() - 90 * 24 * 60 * 60 * 1000
+      const recent = parsed
+        .filter(entry => !Number.isNaN(entry.timestamp) && entry.timestamp >= cutoff)
+        .sort((a, b) => b.timestamp - a.timestamp)
+      if (recent.length < MIN_RSS_RESULTS) return null
+      candidates = recent
+    }
+
+    for (const entry of candidates.slice(0, maxResults)) {
+      results.results.push({
+        title: entry.title,
+        url: entry.url,
+        content: entry.content,
+        ...(entry.publishedDate
+          ? { publishedDate: entry.publishedDate }
+          : {})
       })
     }
 

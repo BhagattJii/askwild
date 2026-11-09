@@ -43,10 +43,9 @@ function cacheKey(parts: {
     parts.include,
     parts.exclude
   ].join('|')
-  // v2: the first generation cached raw provider output, which sometimes
-  // held a poisoned random SERP for 30 minutes. v2 keys only relevance-
-  // gated result sets, so old poison can never be served again.
-  return `aw:search:v2:${encodeURIComponent(raw).slice(0, 512)}`
+  // v3: adds freshness-aware TTLs (news-type results 25 min, evergreen 6h)
+  // and stores only pool-verified strong result sets.
+  return `aw:search:v3:${encodeURIComponent(raw).slice(0, 512)}`
 }
 
 function cacheable(value: SearchResults): boolean {
@@ -63,12 +62,12 @@ function memoryGet(key: string): SearchResults | undefined {
   return entry.value
 }
 
-function memorySet(key: string, value: SearchResults): void {
+function memorySet(key: string, value: SearchResults, expiresAt: number): void {
   if (memory.size >= MEMORY_MAX_ENTRIES) {
     const oldest = memory.keys().next().value
     if (oldest !== undefined) memory.delete(oldest)
   }
-  memory.set(key, { value, expiresAt: Date.now() + MEMORY_TTL_MS })
+  memory.set(key, { value, expiresAt })
 }
 
 async function upstashRequest(
@@ -105,7 +104,11 @@ async function upstashGet(key: string): Promise<SearchResults | undefined> {
   }
 }
 
-async function upstashSet(key: string, json: string): Promise<void> {
+async function upstashSet(
+  key: string,
+  json: string,
+  ttlSeconds: number = UPSTASH_TTL_SECONDS
+): Promise<void> {
   const base = process.env.UPSTASH_REDIS_REST_URL
   const token = process.env.UPSTASH_REDIS_REST_TOKEN
   if (!base || !token) return
@@ -113,7 +116,7 @@ async function upstashSet(key: string, json: string): Promise<void> {
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), UPSTASH_TIMEOUT_MS)
   try {
-    await fetch(`${base}/set/${key}?EX=${UPSTASH_TTL_SECONDS}`, {
+    await fetch(`${base}/set/${key}?EX=${Math.ceil(ttlSeconds)}`, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${token}`,
@@ -144,12 +147,14 @@ export async function getCachedResults(
 
 export async function putCachedResults(
   parts: Parameters<typeof cacheKey>[0],
-  value: SearchResults
+  value: SearchResults,
+  ttlSeconds: number = UPSTASH_TTL_SECONDS
 ): Promise<void> {
   if (!cacheable(value)) return
   const key = cacheKey(parts)
-  memorySet(key, value)
-  await upstashSet(key, JSON.stringify(value))
+  const expiresAt = Date.now() + ttlSeconds * 1000
+  memorySet(key, value, expiresAt)
+  await upstashSet(key, JSON.stringify(value), ttlSeconds)
 }
 
 export function makeSearchCacheKey(parts: Parameters<typeof cacheKey>[0]) {
