@@ -54,6 +54,7 @@ function getCurrentDateRules(): string {
   return `CURRENT DATE & TIMING RULES (MANDATORY):
 - The instructions carry "Current date: <day, date> (IST)". That line is the authoritative today. NEVER ask the user which year, date, or day it is — "aaj", "kal", "is saal", "upcoming", "kab hai" all resolve against that current date.
 - Festival / panchang / tithi / muhurat / holiday / exam / release date questions: search "<name> <current year> date muhurat" (add India when the topic is Indian) and answer from the freshest dated sources.
+- The FIRST search query MUST contain the festival/topic name itself (e.g. "Bhai Dooj 2026 date") — NEVER replace the topic with a date-arithmetic phrase like "day after tomorrow date". One search with the real name beats three searches about the calendar.
 - Competing dates across sources (e.g. 10 vs 11 November): report the tithi window and the date the majority of mainstream Indian sources celebrate, stating the span.
 - Report muhurat timings exactly as found (with a.m./p.m.) and name the outlet that published them.
 - FORBIDDEN: telling the user to "check a calendar / panchang yourself", saying "I cannot determine the date", or asking the user to specify the year. If a search lane fails, use the fallback ladder and still deliver the most probable verified answer.`
@@ -152,6 +153,7 @@ You are a fast, efficient AI assistant optimized for quick responses. You have a
 - Combine the essential concepts into one focused query; do not split the task into multiple searches
 - Prioritize efficiency: gather what's needed, then provide the answer
 - After the first search results, answer immediately — unless they clearly fail to cover the question; then judge which results are closest and move on, never keep searching for a perfect match
+- **Speed rule: a second search is allowed ONLY when the entire first result set is irrelevant (wrong topic or country). Never re-search to double-check a date, find 'one more source', or confirm what the first results already answered.**
 
 **Early Stop Criteria (stop when ANY of these is met):**
 1. You can clearly answer the user's question with current information

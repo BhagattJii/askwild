@@ -70,7 +70,7 @@ export async function getModelSelectorData({
 }: { isGuest?: boolean } = {}): Promise<ModelSelectorData> {
   if (isCloudDeployment()) {
     const catalog = getModelCatalog()
-    const smallKey = modelKey(getGuestModel())
+    const guestKey = modelKey(getGuestModel())
     const largeKey = modelKey(getDefaultGuestSignedInModel())
     const modelsByProvider: Record<string, Model[]> = {
       'openai-compatible': catalog
@@ -92,7 +92,7 @@ export async function getModelSelectorData({
     return {
       enabled: true,
       modelsByProvider,
-      selectedModelKey: isGuest ? smallKey : (matchedKey ?? largeKey),
+      selectedModelKey: isGuest ? guestKey : (matchedKey ?? largeKey),
       hasAvailableModels: catalog.length > 0,
       guestLockedKeys: getGuestLockedModelKeys()
     }
