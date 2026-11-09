@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next'
 import { Inter as FontSans } from 'next/font/google'
 
+import { ClerkProvider } from '@clerk/nextjs'
 import { Analytics } from '@vercel/analytics/next'
 
 import { getCurrentUser } from '@/lib/auth/get-current-user'
@@ -109,6 +110,10 @@ export default async function RootLayout({
       }
     : null
 
+  const clerkEnabled =
+    authProvider.name === 'clerk' &&
+    Boolean(process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY)
+
   const appTree = (
     <ThemeProvider
       attribute="class"
@@ -153,7 +158,18 @@ export default async function RootLayout({
           fontSans.variable
         )}
       >
-        {appTree}
+        {clerkEnabled ? (
+          <ClerkProvider
+            dynamic
+            publishableKey={process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY}
+            signInUrl="/auth/login"
+            signUpUrl="/auth/login"
+          >
+            {appTree}
+          </ClerkProvider>
+        ) : (
+          appTree
+        )}
       </body>
     </html>
   )
