@@ -1,32 +1,45 @@
-import { SearchResults, SearchResultItem } from '@/lib/types'
+import type { SearchResults, SearchResultItem } from '@/lib/types'
 
 import { BaseSearchProvider } from './base'
 import { getCachedResults, putCachedResults } from './openserp-cache'
 import { SearXNGSearchProvider } from './searxng'
-import { gateResults, type RelevanceVerdict } from '../relevance'
+import { fetchBingRss, fetchWikipedia } from '../keyless-lanes'
+import { gateResults, isFreshnessQuery, type RelevanceVerdict } from '../relevance'
 import { searchNewsRss } from '../news-rss-lane'
 
 /**
- * Keyless Bing lane with a relevance-gated ladder.
+ * Keyless search POOL (the "unlimited, free, no-IP-fear" engine).
  *
- * Bing serves server-rendered SERP markup to plain HTTP requests — no
- * browser, no API key. But from datacenter egress IPs (Cloudflare Workers,
- * Render) it intermittently serves a random cached SERP — car rankings,
- * dictionary entries, LinkedIn profiles — for an unrelated query. The
- * SearXNG mirror degrades the same way under rate limits.
+ * No single keyless source is honest all the time: Bing's HTML SERP
+ * occasionally serves a random cached page to datacenter IPs, its RSS
+ * pipeline is brilliant for freshness queries and garbage for evergreen
+ * ones, SearXNG mirrors degrade under rate limits, and Wikipedia holds
+ * entity facts but not the day's news. So instead of ONE primary
+ * provider, the pool races several cheap keyless lanes at once, filters
+ * every lane through the query-term relevance gate, and hands the model
+ * the first STRONG lane's results:
  *
- * So this provider no longer trusts any single lane. Every lane's results
- * pass through a query-term relevance gate (lib/tools/search/relevance.ts)
- * and the ladder walks: Bing → Bing with a second parameter variant →
- * SearXNG → Google News RSS. The first strong lane wins; weaker evidence is
- * returned untouched but never cached, so junk results can't poison later
- * requests.
+ *   phase 1 (parallel, ~7s): Bing-HTML (scrape worker) + Bing-RSS
+ *                            (direct) + Wikipedia (direct)
+ *   phase 2 (only if weak):  Bing-HTML with mkt=en-IN + SearXNG
+ *   phase 3 (only if weak):  Google News RSS
+ *
+ * Lanes that repeatedly return weak/fail sets take a 10-minute cooldown
+ * (in-memory circuit breaker), so poison can't slow the happy path.
+ * Only STRONG result sets enter the shared cache; freshness queries are
+ * cached 25 minutes, evergreen 6 hours — repeats answer instantly with
+ * zero external calls.
  */
 
-const BING_TIMEOUT_MS = 8000
+const BING_TIMEOUT_MS = 7000
 const SEARXNG_LADDER_CAP_MS = 12000
+const NEWS_RSS_CAP_MS = 6000
 const UA =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36'
+
+const FRESHNESS_TTL_SECONDS = 25 * 60
+const EVERGREEN_TTL_SECONDS = 6 * 60 * 60
+const BREAKER_COOLDOWN_MS = 10 * 60 * 1000
 
 export interface ParsedBingPage {
   results: Array<{ title: string; url: string; content: string }>
@@ -135,6 +148,31 @@ function pickBest(lanes: LaneResult[]): LaneResult | null {
   )
 }
 
+// Circuit breaker state per lambda instance: two consecutive weak/fail
+// outcomes earn the lane a 10-minute cooldown so the pool stops paying
+// for (and waiting on) a temporarily-poisoned source.
+const laneHealth = new Map<string, { softStreak: number; cooldownUntil: number }>()
+
+function laneReady(lane: string): boolean {
+  const entry = laneHealth.get(lane)
+  if (!entry) return true
+  return Date.now() > entry.cooldownUntil
+}
+
+function recordLaneOutcome(lane: string, quality: RelevanceVerdict['quality']): void {
+  const entry = laneHealth.get(lane) ?? { softStreak: 0, cooldownUntil: 0 }
+  if (quality === 'strong') {
+    entry.softStreak = 0
+    entry.cooldownUntil = 0
+  } else {
+    entry.softStreak += 1
+    if (entry.softStreak >= 2) {
+      entry.cooldownUntil = Date.now() + BREAKER_COOLDOWN_MS
+    }
+  }
+  laneHealth.set(lane, entry)
+}
+
 export class BingScrapeSearchProvider extends BaseSearchProvider {
   async search(
     query: string,
@@ -185,26 +223,39 @@ export class BingScrapeSearchProvider extends BaseSearchProvider {
       return !excludeHost(item.url, exclude)
     }
 
-    const bingSerpUrl = (params: string): string =>
-      `https://www.bing.com/search?q=${encodeURIComponent(query)}&${params}`
-
-    const attemptBing = async (params: string): Promise<LaneResult> => {
-      const html = await fetchBingHtml(bingSerpUrl(params))
-      if (!html) return { lane: 'bing', verdict: { passing: [], quality: 'fail' } }
-      const parsed = parseBingHtml(html).results.filter(domainOk)
-      const verdict = gateResults(query, parsed)
+    const laneAttempt = async (
+      lane: string,
+      fetchItems: () => Promise<SearchResultItem[]>
+    ): Promise<LaneResult> => {
+      const items = (await fetchItems()).filter(domainOk)
+      const verdict = gateResults(query, items)
       console.log(
-        `[SearchLadder] bing(${params.slice(0, 24)}…) → ${verdict.quality}, ${verdict.passing.length}/${parsed.length} relevant`
+        `[SearchPool] ${lane} → ${verdict.quality}, ${verdict.passing.length}/${items.length} relevant`
       )
-      return { lane: 'bing', verdict }
+      return { lane, verdict }
     }
 
-    const attemptSearxng = async (): Promise<LaneResult> => {
+    const bingHtml = (params: string) =>
+      laneAttempt('bing-html', async () => {
+        const html = await fetchBingHtml(
+          `https://www.bing.com/search?q=${encodeURIComponent(query)}&${params}`
+        )
+        if (!html) return []
+        return parseBingHtml(html).results
+      })
+
+    const bingRss = () =>
+      laneAttempt('bing-rss', () => fetchBingRss(query, maxResults))
+
+    const wikipedia = () =>
+      laneAttempt('wikipedia', () => fetchWikipedia(query, maxResults))
+
+    const searxng = async (): Promise<LaneResult> => {
       const searxngUrl = process.env.SEARXNG_API_URL
       if (!searxngUrl) {
         return { lane: 'searxng', verdict: { passing: [], quality: 'fail' } }
       }
-      try {
+      return laneAttempt('searxng', async () => {
         const fallback = new SearXNGSearchProvider()
         const secondary = await withTimeout(
           fallback.search(
@@ -217,64 +268,62 @@ export class BingScrapeSearchProvider extends BaseSearchProvider {
           SEARXNG_LADDER_CAP_MS,
           null
         )
-        if (!secondary || !Array.isArray(secondary.results)) {
-          return { lane: 'searxng', verdict: { passing: [], quality: 'fail' } }
-        }
-        const parsed = secondary.results
-          .filter(domainOk)
-          .slice(0, maxResults) as SearchResultItem[]
-        const verdict = gateResults(query, parsed)
-        console.log(
-          `[SearchLadder] searxng → ${verdict.quality}, ${verdict.passing.length}/${parsed.length} relevant`
-        )
-        return { lane: 'searxng', verdict }
-      } catch (error) {
-        console.error('SearXNG secondary lane failed:', error)
-        return { lane: 'searxng', verdict: { passing: [], quality: 'fail' } }
-      }
+        if (!secondary || !Array.isArray(secondary.results)) return []
+        return secondary.results.slice(0, maxResults) as SearchResultItem[]
+      })
     }
 
-    const attemptNewsRss = async (): Promise<LaneResult> => {
-      try {
+    const newsRss = () =>
+      laneAttempt('news-rss', async () => {
         const rss = await searchNewsRss(query, maxResults)
-        if (!rss || !Array.isArray(rss.results)) {
-          return { lane: 'news-rss', verdict: { passing: [], quality: 'fail' } }
-        }
-        const parsed = rss.results.filter(domainOk).slice(0, maxResults)
-        const verdict = gateResults(query, parsed)
-        console.log(
-          `[SearchLadder] news-rss → ${verdict.quality}, ${verdict.passing.length}/${parsed.length} relevant`
-        )
-        return { lane: 'news-rss', verdict }
-      } catch (error) {
-        console.error('News RSS ladder lane failed:', error)
-        return { lane: 'news-rss', verdict: { passing: [], quality: 'fail' } }
-      }
-    }
+        return rss && Array.isArray(rss.results) ? rss.results : []
+      })
 
-    // Ladder: primary Bing pass → parameter-variant pass (datacenter IPs
-    // get random cached SERPs, so a second variant is a real second chance,
-    // not a duplicate call) → SearXNG → News RSS. First strong lane wins,
-    // otherwise the best weak set is handed to the model uncached.
+    // ---- THE POOL ----
     const lanes: LaneResult[] = []
 
-    lanes.push(await attemptBing(`count=${Math.max(maxResults, 10)}&setlang=en`))
+    // Phase 1: three independent views of the web, raced in parallel.
+    const phase1 = [
+      { lane: 'bing-html', cap: BING_TIMEOUT_MS, run: () => bingHtml(`count=${Math.max(maxResults, 10)}&setlang=en`) },
+      { lane: 'bing-rss', cap: BING_TIMEOUT_MS, run: bingRss },
+      { lane: 'wikipedia', cap: BING_TIMEOUT_MS, run: wikipedia }
+    ].filter(candidate => laneReady(candidate.lane))
+
+    const phase1Results = await Promise.all(
+      phase1.map(candidate => withTimeout(candidate.run(), candidate.cap, null))
+    )
+    phase1Results.forEach((result, index) => {
+      if (!result) return
+      recordLaneOutcome(phase1[index].lane, result.verdict.quality)
+      lanes.push(result)
+    })
     let best = pickBest(lanes)
+
+    // Phase 2: market-variant Bing + SearXNG mirror.
     if (best?.verdict.quality !== 'strong') {
-      lanes.push(
-        await attemptBing(
-          `count=${Math.max(maxResults, 10)}&mkt=en-IN&setlang=en&cc=in`
-        )
+      const phase2 = [
+        { lane: 'bing-html', cap: BING_TIMEOUT_MS, run: () => bingHtml(`count=${Math.max(maxResults, 10)}&mkt=en-IN&setlang=en&cc=in`) },
+        { lane: 'searxng', cap: SEARXNG_LADDER_CAP_MS, run: searxng }
+      ].filter(candidate => laneReady(candidate.lane))
+      const phase2Results = await Promise.all(
+        phase2.map(candidate => withTimeout(candidate.run(), candidate.cap, null))
       )
+      phase2Results.forEach((result, index) => {
+        if (!result) return
+        recordLaneOutcome(phase2[index].lane, result.verdict.quality)
+        lanes.push(result)
+      })
       best = pickBest(lanes)
     }
-    if (best?.verdict.quality !== 'strong') {
-      lanes.push(await attemptSearxng())
-      best = pickBest(lanes)
-    }
-    if (best?.verdict.quality !== 'strong') {
-      lanes.push(await attemptNewsRss())
-      best = pickBest(lanes)
+
+    // Phase 3: freshness-grade Google News RSS as the final keyless view.
+    if (best?.verdict.quality !== 'strong' && laneReady('news-rss')) {
+      const final = await withTimeout(newsRss(), NEWS_RSS_CAP_MS, null)
+      if (final) {
+        recordLaneOutcome('news-rss', final.verdict.quality)
+        lanes.push(final)
+        best = pickBest(lanes)
+      }
     }
 
     if (best && best.verdict.passing.length > 0) {
@@ -282,10 +331,14 @@ export class BingScrapeSearchProvider extends BaseSearchProvider {
       results.number_of_results = results.results.length
     }
 
-    // Only strong, query-consistent result sets enter the shared cache;
-    // a poisoned random SERP must not live for 30 minutes in Upstash.
+    // Only strong, query-consistent result sets enter the shared cache:
+    // freshness sets stay 25 minutes, evergreen sets 6 hours, so repeats
+    // are instant and never cost another external call.
     if (best?.verdict.quality === 'strong' && results.results.length > 0) {
-      void putCachedResults(cacheKeyEnv, results)
+      const ttl = isFreshnessQuery(query)
+        ? FRESHNESS_TTL_SECONDS
+        : EVERGREEN_TTL_SECONDS
+      void putCachedResults(cacheKeyEnv, results, ttl)
     }
 
     return results

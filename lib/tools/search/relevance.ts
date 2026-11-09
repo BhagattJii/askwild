@@ -76,19 +76,31 @@ function countTermHits(haystack: string, terms: string[]): number {
 }
 
 /**
- * A result is relevant when a distinctive term binds to its title or URL
- * and the snippet confirms the same topic. One lucky keyword in a random
- * snippet alone is exactly how junk pages pose as matches.
+ * A result is relevant when DISTINCT query terms bind to it. Counting the
+ * same term once per field is exactly how a Suniel-Shetty movie page
+ * ("Bhai ... Bhai ..." in title and snippet) passes a Bhai Dooj query —
+ * one lucky word repeated is not relevance.
  */
 export function isResultRelevant(
   result: SearchResultItem,
   terms: QueryTerms
 ): boolean {
-  const strong = countTermHits(resultHaystack(result), terms.any)
-  if (strong === 0) return false
-  const content =
-    countTermHits((result.content ?? '').toLowerCase(), terms.any) ?? 0
-  return strong + content >= 2
+  const distinctTerms = (haystack: string): Set<string> => {
+    const found = new Set<string>()
+    for (const term of terms.any) {
+      if (haystack.includes(term)) found.add(term)
+    }
+    return found
+  }
+
+  const strong = distinctTerms(resultHaystack(result))
+  const content = distinctTerms((result.content ?? '').toLowerCase())
+
+  if (terms.any.length === 1) {
+    return strong.size >= 1
+  }
+  const union = new Set([...strong, ...content])
+  return union.size >= 2 && strong.size >= 1
 }
 
 export interface RelevanceVerdict {
