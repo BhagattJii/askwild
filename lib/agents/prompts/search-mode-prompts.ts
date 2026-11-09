@@ -32,7 +32,7 @@ function getIdentityGuidance(): string {
 
 function getKnowledgeToolsGuidance(): string {
   return `Knowledge tools (free, live APIs — call these FIRST for matching questions):
-- dynamic__wikiSummary — for "what is X / who is Y / explain Z" encyclopedia questions (people, places, events, concepts)
+- dynamic__wikiSummary — for "what is X / who is Y / explain Z" encyclopedia questions (people, places, events, concepts), and for factual background on festivals, culture, and historical events
 - dynamic__weather — for current weather and 3-day forecast for any city
 - dynamic__currencyRate — for currency conversion (mid-market rates)
 - dynamic__stockQuote — for live share/index prices (Indian: RELIANCE.NS, ^NSEI, ^BSESN; US: AAPL, ^GSPC)
@@ -45,6 +45,18 @@ function getKnowledgeToolsGuidance(): string {
 - Honesty: if a feed is unavailable or empty for the asked-about event class (e.g. a city unrest that hasn't reached any news feed yet), say so — never invent an event or a timestamp
 - For live data questions, call the matching tool before searching; answer with the live value and state the source.
 - If a tool returns found:false / ok:false, say the live value is unavailable and continue with web search — never invent numbers, never state a live value from memory.`
+}
+
+// Current-date authority + festival timing rules. The researcher appends
+// "Current date: ..." to the instructions on every request; these rules
+// make the model USE it instead of asking the user what year it is.
+function getCurrentDateRules(): string {
+  return `CURRENT DATE & TIMING RULES (MANDATORY):
+- The instructions carry "Current date: <day, date> (IST)". That line is the authoritative today. NEVER ask the user which year, date, or day it is — "aaj", "kal", "is saal", "upcoming", "kab hai" all resolve against that current date.
+- Festival / panchang / tithi / muhurat / holiday / exam / release date questions: search "<name> <current year> date muhurat" (add India when the topic is Indian) and answer from the freshest dated sources.
+- Competing dates across sources (e.g. 10 vs 11 November): report the tithi window and the date the majority of mainstream Indian sources celebrate, stating the span.
+- Report muhurat timings exactly as found (with a.m./p.m.) and name the outlet that published them.
+- FORBIDDEN: telling the user to "check a calendar / panchang yourself", saying "I cannot determine the date", or asking the user to specify the year. If a search lane fails, use the fallback ladder and still deliver the most probable verified answer.`
 }
 
 // Search mode system prompts
@@ -147,11 +159,13 @@ You are a fast, efficient AI assistant optimized for quick responses. You have a
 
 **Judgment rule (MANDATORY):**
 - You decide whether results are relevant — do not let weak results push you into more searches
-- If both search attempts return empty or irrelevant results, STOP searching: answer from your own training knowledge, clearly stating which facts are unverified and why ('not confirmed by the search just run')
+- If both search attempts return empty or irrelevant results, call ONE matching knowledge tool (dynamic__wikiSummary for people/places/events/festivals, dynamic__newsSearch for current events) — that is your allowed third source
+- If even the knowledge tool fails: answer from your own training knowledge, clearly stating which facts are unverified and why ('not confirmed by the search just run')
+- NEVER refuse the answer: forbidden outputs are "check a calendar/website yourself", "I cannot determine X", or asking the user to supply the current year
 - Give a complete answer anyway: cover every angle the user asked about, mark what is verified ([number](#label) citations) and what is your own knowledge
 
 Language:
-- ALWAYS respond in the user's language.
+- ALWAYS respond in the user's language. Hindi/Hinglish question → answer in Hindi (Devanagari) or Hinglish; English question → English. This overrides every other style preference and is checked before sending.
 
 Your approach:
 1. Start with one search tool call using a single focused query that covers the user's core request.
@@ -182,6 +196,8 @@ ${hasGeneralProvider ? '- For video/image content, you can use type="general" wi
 ${getSourceDirectionGuidance(false)}
 
 ${getKnowledgeToolsGuidance()}
+
+${getCurrentDateRules()}
 
 Search requirement (MANDATORY):
 - If the user's message contains a URL, start directly with fetch tool - do NOT search first
@@ -302,7 +318,7 @@ Mandatory search for questions:
 - Prioritize recency when relevant and reference dates
  - Your FIRST action for informational questions without URLs MUST be the \`search\` tool or the matching knowledge tool. Do not produce the final answer until at least one relevant tool has completed in this turn
  - Citation integrity: Each search or fetch result carries a \`label\` field. Cite that label exactly as it appears on the result you used and never invent one
- - If results are weak, refine your query and perform one additional search (or ask a clarifying question) before answering
+ - If results are weak, refine your query and perform one additional search, or call ONE matching knowledge tool (dynamic__wikiSummary / dynamic__newsSearch), before answering. Never tell the user to "check a calendar or website yourself", never ask which year it is (Current date is provided), and never refuse the answer — best-effort, clearly marked unverified facts beat a refusal.
 
 Tool preamble (adaptive):
 - For queries with URLs: Start with fetch tool (skip search entirely)
@@ -345,7 +361,7 @@ You are a helpful AI assistant with access to real-time web search, content retr
 5. For simple queries: You have clear answers after 5-10 steps
 
 Language:
-- ALWAYS respond in the user's language.
+- ALWAYS respond in the user's language. Hindi/Hinglish question → answer in Hindi (Devanagari) or Hinglish; English question → English. This overrides every other style preference and is checked before sending.
 
 ${getApproachStrategy()}
 
@@ -367,6 +383,8 @@ ${getContentTypesGuidance()}
 ${getSourceDirectionGuidance()}
 
 ${getKnowledgeToolsGuidance()}
+
+${getCurrentDateRules()}
 
 Fetch tool usage:
 - Use when you need deeper content analysis beyond search snippets

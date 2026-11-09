@@ -11,7 +11,14 @@ import { isProviderEnabled } from '@/lib/utils/registry'
 
 export type CatalogTier = 'small' | 'medium' | 'large'
 
-export const GUEST_MAX_TIER: CatalogTier = 'small'
+/**
+ * Guests run on the medium tier: the small tier's 4B-class model ignores
+ * system-prompt rules (asks "which year?" with the date in the prompt,
+ * answers English to a Hindi question) — the exact failure mode that
+ * makes an answer engine feel broken. Medium reasoning keeps latency
+ * reasonable while actually following instructions.
+ */
+export const GUEST_MAX_TIER: CatalogTier = 'medium'
 export const GUEST_UNLOCK_TIERS: CatalogTier[] = ['medium', 'large']
 
 const TIER_RANK: Record<CatalogTier, number> = {
