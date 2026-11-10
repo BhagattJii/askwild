@@ -72,7 +72,8 @@ stay under quotas; overflow becomes error/429 automatically.
 
 - Relevance is governed by the ask prompt; exact entities and Indian context
   tweak already live in both quick and adaptive mode prompts.
-- Guests pin to the small model (Nemotron 3.5 Lightning); signed-in users
-  get the Ultra model — better at query rewriting too.
+- Guests default to the large tier model (Nemotron 3 Ultra, reasoning off)
+  for fast, instruction-following answers; signed-in users get the same
+  large tier by default and can pick any tier from the model selector.
 - If an answer has zero or stale citations, check `https://openserp.internal/` health,
   raise `OPENSERP_TIMEOUT_MS`, or raise `SEARXNG_CRAWL_MULTIPLIER`.
