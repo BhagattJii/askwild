@@ -56,7 +56,7 @@ describe('clerk auth provider', () => {
   it('asks the admin allowlist before assigning the admin role', () => {
     // roleFor() is private; its allowlist contract is asserted by the
     // shared parseAdminEmails tests, so just confirm env plumbing exists.
-    process.env.ASKWILD_ADMIN_EMAILS = 'x.lakshayy@gmail.com'
+    process.env.ASKWILD_ADMIN_EMAILS = 'admin@example.com'
     expect(clerkAuthProvider.getCurrentUser).toBeDefined()
     expect(clerkAuthProvider.getCurrentUserId).toBeDefined()
   })
